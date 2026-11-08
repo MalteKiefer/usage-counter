@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Restore applies the same checks as the API: limits, tank size and meter order.
+- Restore answers malformed entries with a client error instead of a server error.
+- Restore body limit lowered to 10 MB.
+- Backup download no longer revokes its object URL before the browser starts the download.
+- The app title is a top-level heading again.
+- Dialogs move focus into themselves and return it on close. Escape closes the menu.
+
 ## [1.1.0] 2026-11-08
 
 ### Added

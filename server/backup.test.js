@@ -101,6 +101,42 @@ test('restore rejects an invalid row before writing', async () => {
   backup.data.refills.push({ id: 1, object_id: objectId, filled_at: '2020-02-30T10:00', meter: null, liters: 10, total_eur: null, level_after: null, note: '' });
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
-  assert.match((await res.json()).error, /Datum ungültig/);
+  assert.match((await res.json()).error, /Datum und Uhrzeit ungültig/);
   assert.equal((await getJson(`/api/objects/${objectId}/readings`)).length, 2);
+});
+
+test('restore rejects entries that are not objects with a client error', async () => {
+  const backup = await getJson('/api/backup');
+  backup.data.objects.push(null);
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 422);
+  assert.match((await res.json()).error, /ist kein Objekt/);
+});
+
+test('restore applies the same limits as the API', async () => {
+  const backup = await getJson('/api/backup');
+  backup.data.objects[0].tank_size = 100;
+  backup.data.refills.push({ id: 60, object_id: objectId, filled_at: '2020-02-05T08:00', meter: null, liters: 10, total_eur: null, level_after: 500, note: '' });
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 422);
+  assert.match((await res.json()).error, /Füllstand|Tankgröße/);
+});
+
+test('restore rejects a meter value that decreases over time', async () => {
+  const backup = await getJson('/api/backup');
+  const water = backup.data.meters.find((m) => m.kind === 'water' && m.sub_of == null);
+  backup.data.readings.push({ id: 900, meter_id: water.id, read_at: '2020-03-01T08:00', meter: 1, tank_level: null, note: '' });
+  backup.data.readings.push({ id: 901, meter_id: water.id, read_at: '2020-04-01T08:00', meter: 0, tank_level: null, note: '' });
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 422);
+});
+
+test('restore rejects a refill meter value outside the oil readings around it', async () => {
+  const backup = await getJson('/api/backup');
+  backup.data.meters.push({ id: 77, object_id: objectId, kind: 'oil', name: 'Heizöl', sub_of: null });
+  backup.data.readings.push({ id: 77, meter_id: 77, read_at: '2020-01-01T08:00', meter: 100, tank_level: null, note: '' });
+  backup.data.readings.push({ id: 78, meter_id: 77, read_at: '2020-03-01T08:00', meter: 200, tank_level: null, note: '' });
+  backup.data.refills.push({ id: 50, object_id: objectId, filled_at: '2020-02-01T08:00', meter: 999999, liters: 10, total_eur: null, level_after: null, note: '' });
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 422);
 });

@@ -72,17 +72,23 @@ export default function App() {
   const [range, setRange] = useState(RANGES[1]);
   const [panel, setPanel] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Clicks outside the menu close it.
   useEffect(() => {
     if (!menuOpen) return undefined;
     const close = (e) => {
-      if (!e.target.closest('.menu')) setMenuOpen(false);
+      if (!e.target.closest?.('.menu')) setMenuOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
     };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
-  const [error, setError] = useState(null);
 
   const object = objects.find((o) => o.id === objectId) ?? null;
   const meter = data.meters.find((m) => m.id === meterId) ?? data.meters[0] ?? null;
@@ -228,13 +234,13 @@ export default function App() {
     <I18nContext.Provider value={t}>
       <div className="app" lang={prefs.lang}>
         <header className="appbar">
-          <div className="brand">
+          <h1 className="brand">
             <span className="flame">🔥</span> {t('app.title')}
-          </div>
+          </h1>
           <div className="menu">
             <button className="ghost" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
-                {t('menu.manage')} ▾
-              </button>
+              {t('menu.manage')} ▾
+            </button>
               {menuOpen && (
                 <div className="menu-list" role="menu">
                   {object && (
