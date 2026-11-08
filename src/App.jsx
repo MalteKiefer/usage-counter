@@ -24,6 +24,8 @@ import { loadPrefs, loadSelectedObject, savePrefs, saveSelectedObject } from './
 import { setFormatPrefs } from './lib/format.js';
 import MeterView from './views/MeterView.jsx';
 
+const REPO_URL = 'https://github.com/MalteKiefer/usage-counter';
+
 const RANGES = [
   { label: 'range.30', days: 30 },
   { label: 'range.90', days: 90 },
@@ -335,6 +337,12 @@ export default function App() {
             )}
           </>
         )}
+        <footer className="app-footer">
+          <a href={REPO_URL} target="_blank" rel="noopener noreferrer">{t('app.title')}</a>
+          <span>
+            {t('footer.version')} {__APP_VERSION__}
+          </span>
+        </footer>
       </div>
     </I18nContext.Provider>
   );

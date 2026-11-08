@@ -2,9 +2,9 @@ name: usage-counter
 
 services:
   app:
+    image: ghcr.io/maltekiefer/usage-counter:${USAGE_COUNTER_VERSION:-1.1.0}
     build:
       context: .
-    image: usage-counter:local
     restart: unless-stopped
     user: "1000:1000"
     read_only: true

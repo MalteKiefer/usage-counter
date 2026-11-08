@@ -15,9 +15,14 @@ per interval, per day and per month, and estimate how long the heating oil in th
 
 ## Quick start with Docker Compose
 
+Images are published to GitHub Container Registry with every release:
+`ghcr.io/maltekiefer/usage-counter:<version>`.
+
 ```bash
-docker compose up -d --build
+USAGE_COUNTER_VERSION=1.1.0 docker compose up -d
 ```
+
+To build from source instead, run `docker compose up -d --build`.
 
 The app is then available at http://127.0.0.1:8080. The data lives in the volume `oil-data`.
 

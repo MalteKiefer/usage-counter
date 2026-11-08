@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 
 const DE = {
+  'footer.version': 'Version',
   'menu.manage': 'Verwaltung',
   'backup.button': 'Backup',
   'backup.title': 'Backup und Wiederherstellung',
@@ -173,6 +174,7 @@ const DE = {
 };
 
 const EN = {
+  'footer.version': 'Version',
   'menu.manage': 'Manage',
   'backup.button': 'Backup',
   'backup.title': 'Backup and restore',
