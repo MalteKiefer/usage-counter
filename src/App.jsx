@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   createMeter,
   createObject,
@@ -17,7 +17,8 @@ import {
   fetchTankLevels,
   updateObject,
 } from './api.js';
-import { MeterPanel, ObjectPanel, SettingsPanel } from './components/Panels.jsx';
+import { BackupPanel, MeterPanel, ObjectPanel, SettingsPanel } from './components/Panels.jsx';
+import Modal from './components/Modal.jsx';
 import { I18nContext, translator } from './i18n.js';
 import { loadPrefs, loadSelectedObject, savePrefs, saveSelectedObject } from './lib/prefs.js';
 import { setFormatPrefs } from './lib/format.js';
@@ -35,6 +36,14 @@ const DELETE_ENDPOINTS = {
   readings: deleteReading,
   refills: deleteRefill,
   'tank-levels': deleteTankLevel,
+};
+
+const PANEL_TITLES = {
+  'object-new': 'object.new',
+  'object-edit': 'object.edit',
+  meters: 'meter.manage',
+  backup: 'backup.button',
+  settings: 'settings.title',
 };
 
 const EMPTY_DATA = { meters: [], readings: [], refills: [], levels: [] };
@@ -60,6 +69,17 @@ export default function App() {
   const [meterId, setMeterId] = useState(null);
   const [range, setRange] = useState(RANGES[1]);
   const [panel, setPanel] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Clicks outside the menu close it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const close = (e) => {
+      if (!e.target.closest('.menu')) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
   const [error, setError] = useState(null);
 
   const object = objects.find((o) => o.id === objectId) ?? null;
@@ -131,9 +151,12 @@ export default function App() {
     setPrefs(next);
   }
 
-  function togglePanel(name) {
-    setPanel((current) => (current === name ? null : name));
+  function openPanel(name) {
+    setMenuOpen(false);
+    setPanel(name);
   }
+
+  const closePanel = useCallback(() => setPanel(null), []);
 
   const actions = {
     // Several meters at one moment go in one request, so either all or none are saved.
@@ -178,6 +201,11 @@ export default function App() {
     }
   }
 
+  async function restoredBackup() {
+    setObjectId(null);
+    await refreshObjects();
+  }
+
   async function removeObject(id) {
     await deleteObject(id);
     setObjectId(null);
@@ -197,13 +225,31 @@ export default function App() {
   return (
     <I18nContext.Provider value={t}>
       <div className="app" lang={prefs.lang}>
-        <header className="hero">
-          <div>
-            <h1>
-              <span className="flame">🔥</span> {t('app.title')}
-            </h1>
-            <p className="muted">{t('app.subtitle')}</p>
+        <header className="appbar">
+          <div className="brand">
+            <span className="flame">🔥</span> {t('app.title')}
           </div>
+          <div className="menu">
+            <button className="ghost" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+                {t('menu.manage')} ▾
+              </button>
+              {menuOpen && (
+                <div className="menu-list" role="menu">
+                  {object && (
+                    <button role="menuitem" onClick={() => openPanel('object-edit')}>{t('object.edit')}</button>
+                  )}
+                  {object && (
+                    <button role="menuitem" onClick={() => openPanel('meters')}>{t('meter.manage')}</button>
+                  )}
+                  <button role="menuitem" onClick={() => openPanel('backup')}>{t('backup.button')}</button>
+                  <button role="menuitem" onClick={() => openPanel('settings')}>{t('settings.title')}</button>
+                </div>
+              )}
+            </div>
+        </header>
+
+        <section className="hero">
+          <p className="muted">{t('app.subtitle')}</p>
           <div className="range" role="group" aria-label={t('app.period')}>
             {RANGES.map((r) => (
               <button key={r.label} className={r.days === range.days ? 'active' : ''} onClick={() => setRange(r)}>
@@ -211,7 +257,7 @@ export default function App() {
               </button>
             ))}
           </div>
-        </header>
+        </section>
 
         <section className="card toolbar">
           <label>
@@ -228,31 +274,31 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="toolbar-actions">
-            <button className="ghost" onClick={() => togglePanel('object-new')}>{t('object.new')}</button>
-            {object && <button className="ghost" onClick={() => togglePanel('object-edit')}>{t('object.edit')}</button>}
-            {object && <button className="ghost" onClick={() => togglePanel('meters')}>{t('meter.add')}</button>}
-            <button className="ghost" onClick={() => togglePanel('settings')}>{t('settings.title')}</button>
-          </div>
+          <button className="primary" onClick={() => openPanel('object-new')}>+ {t('object.new')}</button>
         </section>
 
         {error && <div className="banner error">{error}</div>}
 
-        {panel === 'object-new' && <ObjectPanel onSave={saveObject} onClose={() => setPanel(null)} />}
-        {panel === 'object-edit' && object && (
-          <ObjectPanel
-            key={object.id}
-            object={object}
-            onSave={saveObject}
-            onDelete={removeObject}
-            onClose={() => setPanel(null)}
-          />
-        )}
-        {panel === 'meters' && object && (
-          <MeterPanel meters={data.meters} onAdd={addMeter} onDelete={removeMeter} />
-        )}
-        {panel === 'settings' && (
-          <SettingsPanel prefs={prefs} onChange={changePrefs} onClose={() => setPanel(null)} />
+        {panel && (
+          <Modal title={t(PANEL_TITLES[panel])} onClose={closePanel}>
+            {panel === 'object-new' && <ObjectPanel onSave={saveObject} onClose={closePanel} />}
+            {panel === 'object-edit' && object && (
+              <ObjectPanel
+                key={object.id}
+                object={object}
+                onSave={saveObject}
+                onDelete={removeObject}
+                onClose={closePanel}
+              />
+            )}
+            {panel === 'meters' && object && (
+              <MeterPanel meters={data.meters} onAdd={addMeter} onDelete={removeMeter} />
+            )}
+            {panel === 'backup' && <BackupPanel onRestored={restoredBackup} onClose={closePanel} />}
+            {panel === 'settings' && (
+              <SettingsPanel prefs={prefs} onChange={changePrefs} onClose={closePanel} />
+            )}
+          </Modal>
         )}
 
         {!object && <p className="muted">{t('app.noObject')}</p>}
@@ -268,7 +314,8 @@ export default function App() {
                   className={meter?.id === m.id ? 'active' : ''}
                   onClick={() => setMeterId(m.id)}
                 >
-                  {m.name} <span className="small">· {t(`kind.${m.kind}`)}</span>
+                  {m.name}
+                  {m.name !== t(`kind.${m.kind}`) && <span className="small"> · {t(`kind.${m.kind}`)}</span>}
                 </button>
               ))}
             </nav>

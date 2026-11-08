@@ -35,3 +35,12 @@ export const fetchTankLevels = (objectId) => request(`/api/objects/${objectId}/t
 export const createTankLevel = (objectId, entry) =>
   request(`/api/objects/${objectId}/tank-levels`, json('POST', entry));
 export const deleteTankLevel = (id) => request(`/api/tank-levels/${id}`, { method: 'DELETE' });
+
+export async function fetchBackup() {
+  const res = await fetch('/api/backup');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.blob();
+}
+
+export const restoreBackup = (text) =>
+  request('/api/restore?confirm=replace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text });

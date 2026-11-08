@@ -3,11 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
 import { localWallMs, wallMs } from '../src/lib/derive.js';
+import { DATE_TIME, isId, isNumber, isOptionalNumber, isRealDateTime } from './validation.js';
+import { BackupError, exportBackup, restoreBackup } from './backup.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const app = express();
 
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 const FUTURE_TOLERANCE_MS = 5 * 60_000;
 const MAX_VALUE = 100_000;
 const METER_KINDS = ['oil', 'water', 'power'];
@@ -62,15 +63,6 @@ const stmt = {
   removeTankLevel: db.prepare('DELETE FROM tank_levels WHERE id = ?'),
 };
 
-const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
-const isOptionalNumber = (value) => value == null || isNumber(value);
-const isId = (value) => Number.isInteger(value) && value > 0;
-
-// Date rolls 2026-02-30 over to March, so compare the formatted result with the input.
-function isRealDateTime(value) {
-  const ms = Date.parse(`${value}:00Z`);
-  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 16) === value;
-}
 
 function dateTimeError(value) {
   if (typeof value !== 'string' || !DATE_TIME.test(value) || !isRealDateTime(value)) {
@@ -194,7 +186,31 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(express.json());
+// Restore is the only route that takes a large body. The default parser skips it.
+const jsonDefault = express.json();
+app.use('/api/restore', express.json({ limit: '50mb' }));
+app.use((req, res, next) => (req.path.startsWith('/api/restore') ? next() : jsonDefault(req, res, next)));
+
+app.get('/api/backup', (_req, res) => {
+  const date = new Date().toISOString().slice(0, 10);
+  res.set({
+    'Content-Disposition': `attachment; filename="usage-counter-backup-${date}.json"`,
+    'Cache-Control': 'no-store',
+  });
+  res.json(exportBackup());
+});
+
+app.post('/api/restore', (req, res) => {
+  if (req.query.confirm !== 'replace') {
+    return res.status(422).json({ error: 'Wiederherstellung nicht bestätigt' });
+  }
+  try {
+    res.json(restoreBackup(req.body));
+  } catch (err) {
+    if (err instanceof BackupError) return res.status(422).json({ error: err.message });
+    throw err;
+  }
+});
 
 // Objects (Häuser, Wohnungen, ...) and their meters.
 
