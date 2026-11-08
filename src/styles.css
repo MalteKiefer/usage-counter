@@ -751,7 +751,7 @@ button.icon.danger:hover {
   }
 
   .stats {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -763,15 +763,8 @@ button.icon.danger:hover {
 
 /* Grid items must shrink to the screen, not to their content */
 .app,
-.view,
-.split,
-.charts,
-.stats {
+.view {
   grid-template-columns: minmax(0, 1fr);
-}
-
-.split {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .app > *,
@@ -796,12 +789,6 @@ button.icon.danger:hover {
 @media (max-width: 760px) {
   .charts {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 641px) {
-  .stats {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 }
 

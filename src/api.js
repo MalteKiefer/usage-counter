@@ -1,11 +1,11 @@
-async function request(url, options) {
+async function request(url, options, read = (res) => res.json()) {
   const res = await fetch(url, options);
   if (res.status === 204) return null;
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error ?? `HTTP ${res.status}`);
   }
-  return res.json();
+  return read(res);
 }
 
 const json = (method, body) => ({
@@ -36,11 +36,7 @@ export const createTankLevel = (objectId, entry) =>
   request(`/api/objects/${objectId}/tank-levels`, json('POST', entry));
 export const deleteTankLevel = (id) => request(`/api/tank-levels/${id}`, { method: 'DELETE' });
 
-export async function fetchBackup() {
-  const res = await fetch('/api/backup');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.blob();
-}
+export const fetchBackup = () => request('/api/backup', undefined, (res) => res.blob());
 
 export const restoreBackup = (text) =>
   request('/api/restore?confirm=replace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text });

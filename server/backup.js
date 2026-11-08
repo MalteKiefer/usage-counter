@@ -1,17 +1,26 @@
 import { db } from './db.js';
-import { isId, isNumber, isOptionalNumber, isRealDateTime, DATE_TIME } from './validation.js';
+import { isId } from './validation.js';
+import {
+  nameError,
+  neighbourError,
+  tankSizeError,
+  validateReading,
+  validateRefill,
+  validateTankLevel,
+} from './rules.js';
 
 export const BACKUP_FORMAT = 'usage-counter-backup';
 export const BACKUP_VERSION = 1;
 
 const METER_KINDS = ['oil', 'water', 'power'];
-const MAX_VALUE = 100_000;
 
 export class BackupError extends Error {}
 
 const fail = (message) => {
   throw new BackupError(message);
 };
+
+const TABLES = ['objects', 'meters', 'readings', 'refills', 'tank_levels'];
 
 const EXPORT_QUERIES = {
   objects: 'SELECT id, name, tank_size FROM objects ORDER BY id',
@@ -30,17 +39,30 @@ export function exportBackup() {
   return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), data };
 }
 
-const isName = (value) => typeof value === 'string' && value.trim().length >= 1 && value.length <= 100;
-const isNote = (value) => value == null || (typeof value === 'string' && value.length <= 200);
-const isDate = (value) => typeof value === 'string' && DATE_TIME.test(value) && isRealDateTime(value);
+// Every entry must be a plain object, otherwise field access would fail with a server error.
+function rowsOf(data, table) {
+  const rows = data[table];
+  if (!Array.isArray(rows)) fail(`${table} fehlt`);
+  rows.forEach((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) fail(`${table}[${index}] ist kein Objekt`);
+  });
+  return rows;
+}
 
-function uniqueIds(rows, table) {
+function checkIds(rows, table) {
   const seen = new Set();
   for (const row of rows) {
     if (!isId(row.id) || seen.has(row.id)) fail(`${table}: ungültige oder doppelte id ${row.id}`);
     seen.add(row.id);
   }
-  return seen;
+}
+
+// Runs the same rules as the API for every row. The restore must not accept what the API refuses.
+function checkRows(rows, table, check) {
+  for (const row of rows) {
+    const error = check(row);
+    if (error) fail(`${table} ${row.id}: ${error}`);
+  }
 }
 
 // Checks every row and every reference before anything is written.
@@ -51,28 +73,21 @@ export function parseBackup(body) {
   if (body.version !== BACKUP_VERSION) fail(`Version ${body.version} wird nicht unterstützt`);
   const data = body.data;
   if (!data || typeof data !== 'object') fail('Daten fehlen');
-  for (const table of Object.keys(EXPORT_QUERIES)) {
-    if (!Array.isArray(data[table])) fail(`${table} fehlt`);
-  }
+  for (const table of TABLES) rowsOf(data, table);
 
   const objects = data.objects;
-  for (const o of objects) {
-    if (!isName(o.name)) fail(`objects ${o.id}: Name ungültig`);
-    if (o.tank_size != null && (!isNumber(o.tank_size) || o.tank_size <= 0 || o.tank_size > MAX_VALUE)) {
-      fail(`objects ${o.id}: Tankgröße ungültig`);
-    }
-  }
-  const objectIds = uniqueIds(objects, 'objects');
+  checkIds(objects, 'objects');
+  checkRows(objects, 'objects', (o) => nameError(o.name) ?? tankSizeError(o.tank_size ?? null));
+  const tankSizes = new Map(objects.map((o) => [o.id, o.tank_size ?? null]));
 
   const meters = data.meters;
-  const meterById = new Map();
-  for (const m of meters) {
-    if (!isId(m.id) || meterById.has(m.id)) fail(`meters: ungültige oder doppelte id ${m.id}`);
-    meterById.set(m.id, m);
-    if (!objectIds.has(m.object_id)) fail(`meters ${m.id}: Objekt ${m.object_id} fehlt`);
-    if (!METER_KINDS.includes(m.kind)) fail(`meters ${m.id}: Zählerart ungültig`);
-    if (!isName(m.name)) fail(`meters ${m.id}: Name ungültig`);
-  }
+  checkIds(meters, 'meters');
+  const meterById = new Map(meters.map((m) => [m.id, m]));
+  checkRows(meters, 'meters', (m) => {
+    if (!tankSizes.has(m.object_id)) return `Objekt ${m.object_id} fehlt`;
+    if (!METER_KINDS.includes(m.kind)) return 'Zählerart ungültig';
+    return nameError(m.name);
+  });
   for (const m of meters) {
     if (m.sub_of == null) continue;
     const parent = meterById.get(m.sub_of);
@@ -82,48 +97,73 @@ export function parseBackup(body) {
   }
 
   const readings = data.readings;
-  const readingKeys = new Set();
-  uniqueIds(readings, 'readings');
-  for (const r of readings) {
+  checkIds(readings, 'readings');
+  checkRows(readings, 'readings', (r) => {
     const meter = meterById.get(r.meter_id);
-    if (!meter) fail(`readings ${r.id}: Zähler ${r.meter_id} fehlt`);
-    if (!isDate(r.read_at)) fail(`readings ${r.id}: Datum ungültig`);
-    if (!isNumber(r.meter) || r.meter < 0) fail(`readings ${r.id}: Zählerstand ungültig`);
-    if (r.tank_level != null && (meter.kind !== 'oil' || !isNumber(r.tank_level) || r.tank_level < 0)) {
-      fail(`readings ${r.id}: Füllstand ungültig`);
-    }
-    if (!isNote(r.note)) fail(`readings ${r.id}: Notiz ungültig`);
-    const key = `${r.meter_id}|${r.read_at}`;
-    if (readingKeys.has(key)) fail(`readings ${r.id}: doppelte Ablesung`);
-    readingKeys.add(key);
-  }
+    if (!meter) return `Zähler ${r.meter_id} fehlt`;
+    return validateReading(r, meter, tankSizes.get(meter.object_id));
+  });
+  const readingKeys = new Set(readings.map((r) => `${r.meter_id}|${r.read_at}`));
+  if (readingKeys.size !== readings.length) fail('readings: doppelte Ablesung');
+  const series = seriesByMeter(readings);
+  checkSeries(series);
 
   const refills = data.refills;
-  uniqueIds(refills, 'refills');
+  checkIds(refills, 'refills');
+  checkRows(refills, 'refills', (f) => {
+    if (!tankSizes.has(f.object_id)) return `Objekt ${f.object_id} fehlt`;
+    return validateRefill(f, tankSizes.get(f.object_id));
+  });
+  // Like the API, a refill meter value is checked against the oil meter with the lowest id.
+  const oilOf = new Map();
+  for (const m of [...meters].sort((a, b) => a.id - b.id)) {
+    if (m.kind === 'oil' && !oilOf.has(m.object_id)) oilOf.set(m.object_id, m);
+  }
   for (const f of refills) {
-    if (!objectIds.has(f.object_id)) fail(`refills ${f.id}: Objekt ${f.object_id} fehlt`);
-    if (!isDate(f.filled_at)) fail(`refills ${f.id}: Datum ungültig`);
-    if (!isOptionalNumber(f.meter) || (f.meter ?? 0) < 0) fail(`refills ${f.id}: Zählerstand ungültig`);
-    if (!isNumber(f.liters) || f.liters <= 0 || f.liters > MAX_VALUE) fail(`refills ${f.id}: Menge ungültig`);
-    if (!isOptionalNumber(f.total_eur) || (f.total_eur ?? 0) < 0) fail(`refills ${f.id}: Preis ungültig`);
-    if (!isOptionalNumber(f.level_after) || (f.level_after ?? 0) < 0) fail(`refills ${f.id}: Füllstand ungültig`);
-    if (!isNote(f.note)) fail(`refills ${f.id}: Notiz ungültig`);
+    if (f.meter == null) continue;
+    const oil = oilOf.get(f.object_id);
+    if (!oil) continue;
+    const oilSeries = series.get(oil.id) ?? [];
+    const prev = oilSeries.filter((r) => r.read_at < f.filled_at).at(-1) ?? null;
+    const next = oilSeries.find((r) => r.read_at > f.filled_at) ?? null;
+    const error = neighbourError(prev, next, f.meter);
+    if (error) fail(`refills ${f.id}: ${error}`);
   }
 
   const levels = data.tank_levels;
-  uniqueIds(levels, 'tank_levels');
-  const levelKeys = new Set();
-  for (const l of levels) {
-    if (!objectIds.has(l.object_id)) fail(`tank_levels ${l.id}: Objekt ${l.object_id} fehlt`);
-    if (!isDate(l.read_at)) fail(`tank_levels ${l.id}: Datum ungültig`);
-    if (!isNumber(l.level) || l.level < 0) fail(`tank_levels ${l.id}: Füllstand ungültig`);
-    if (!isNote(l.note)) fail(`tank_levels ${l.id}: Notiz ungültig`);
-    const key = `${l.object_id}|${l.read_at}`;
-    if (levelKeys.has(key)) fail(`tank_levels ${l.id}: doppelter Wert`);
-    levelKeys.add(key);
-  }
+  checkIds(levels, 'tank_levels');
+  checkRows(levels, 'tank_levels', (l) => {
+    if (!tankSizes.has(l.object_id)) return `Objekt ${l.object_id} fehlt`;
+    return validateTankLevel(l, tankSizes.get(l.object_id));
+  });
+  const levelKeys = new Set(levels.map((l) => `${l.object_id}|${l.read_at}`));
+  if (levelKeys.size !== levels.length) fail('tank_levels: doppelter Wert');
 
   return data;
+}
+
+// Backups list rows by id, not by time, so each meter's readings are put in time order first.
+function seriesByMeter(readings) {
+  const byMeter = new Map();
+  for (const r of readings) {
+    const series = byMeter.get(r.meter_id);
+    if (series) series.push(r);
+    else byMeter.set(r.meter_id, [r]);
+  }
+  for (const series of byMeter.values()) {
+    series.sort((a, b) => (a.read_at < b.read_at ? -1 : a.read_at > b.read_at ? 1 : 0));
+  }
+  return byMeter;
+}
+
+function checkSeries(byMeter) {
+  for (const series of byMeter.values()) {
+    for (let i = 1; i < series.length; i++) {
+      if (series[i].meter < series[i - 1].meter) {
+        fail(`readings ${series[i].id}: ${neighbourError(series[i - 1], null, series[i].meter)}`);
+      }
+    }
+  }
 }
 
 // Replaces all data with the backup in one transaction. Nothing changes if any step fails.

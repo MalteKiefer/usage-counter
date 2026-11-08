@@ -185,7 +185,6 @@ export function SettingsPanel({ prefs, onChange, onClose }) {
   );
 }
 
-// Export the whole database as JSON, or replace it with a previously exported file.
 export function BackupPanel({ onRestored, onClose }) {
   const t = useT();
   const [message, setMessage] = useState(null);
@@ -199,8 +198,10 @@ export function BackupPanel({ onRestored, onClose }) {
       const link = document.createElement('a');
       link.href = url;
       link.download = `usage-counter-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       setError(err.message);
     }

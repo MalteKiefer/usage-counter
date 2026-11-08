@@ -1,18 +1,24 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-// Dialog over the page. Closes on Escape, on the backdrop and on the close button.
 export default function Modal({ title, onClose, children }) {
+  const dialog = useRef(null);
+
   useEffect(() => {
+    const opener = document.activeElement;
+    dialog.current?.focus();
     function onKey(e) {
       if (e.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      opener?.focus?.();
+    };
   }, [onClose]);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={dialog} className="modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         {children}
       </div>
     </div>
