@@ -30,13 +30,13 @@ services:
       # Bound to the host loopback only. The API has no authentication yet.
       - "127.0.0.1:8080:3001"
     volumes:
-      - oil:/data
+      - data:/data
     # Uncomment once a client secret file exists, see README.
     # secrets:
     #   - oidc_client_secret
 
 volumes:
-  oil:
+  data:
 
 # secrets:
 #   oidc_client_secret:

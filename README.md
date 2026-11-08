@@ -41,10 +41,10 @@ Record readings, see consumption per interval, day and month, and find out how l
 USAGE_COUNTER_VERSION=1.2.0 docker compose up -d
 ```
 
-Open **http://127.0.0.1:8080**. Data lives in the Docker volume `oil`.
+Open **http://127.0.0.1:8080**. Data lives in the Docker volume `data`.
 
 > [!NOTE]
-> Earlier versions used a volume called `usage-counter_oil-data`. To keep that data, copy it into the volume `oil` before the first start.
+> Earlier versions used the volume `usage-counter_oil-data`. To keep that data, copy it into the volume `usage-counter_data` before the first start.
 
 To build from source instead: `docker compose up -d --build`.
 

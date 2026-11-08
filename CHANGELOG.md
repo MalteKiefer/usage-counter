@@ -15,7 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- The Compose data volume is named `oil`. Existing data under `usage-counter_oil-data` must be copied once.
+- The Compose data volume is named `data`, so it does not imply a single meter type. Existing data under `usage-counter_oil-data` must be copied once.
 
 ## [1.2.0] 2026-11-08
 
