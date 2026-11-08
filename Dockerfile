@@ -15,7 +15,7 @@ FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
     PORT=3001 \
     HOST=0.0.0.0 \
-    OIL_DB=/data/oil.db
+    DB_PATH=/data/usage.db
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules

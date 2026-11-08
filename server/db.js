@@ -1,10 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { config } from './config.js';
 
-const dbPath = process.env.OIL_DB ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'oil.db');
-
-export const db = new DatabaseSync(dbPath);
+export const db = new DatabaseSync(config.dbPath);
 
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 

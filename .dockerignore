@@ -3,8 +3,9 @@
 .claude
 node_modules
 dist
-oil.db*
+usage.db*
 *.log
 .env
 .env.*
+secrets
 coverage

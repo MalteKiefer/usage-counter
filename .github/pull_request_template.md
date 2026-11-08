@@ -10,5 +10,5 @@
 
 - [ ] `npm run lint` and `npm test` pass locally
 - [ ] Behaviour changes have tests
-- [ ] No data, secrets or local config (`oil.db`, `.env`, `.claude/`) included
+- [ ] No data, secrets or local config (`usage.db`, `.env`, `.claude/`) included
 - [ ] Documentation and `CHANGELOG.md` updated where relevant

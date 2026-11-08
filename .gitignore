@@ -3,13 +3,14 @@ node_modules/
 dist/
 
 # local data: never commit the database
-oil.db
-oil.db-*
+usage.db
+usage.db-*
 
 # environment and local tooling
 .env
 .env.*
 !.env.example
+secrets/
 .claude/
 .vscode/
 .idea/

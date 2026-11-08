@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oil-backup-'));
-process.env.OIL_DB = path.join(dir, 'test.db');
+process.env.DB_PATH = path.join(dir, 'test.db');
 const { app } = await import('./app.js');
 
 let server;

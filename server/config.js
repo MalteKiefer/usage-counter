@@ -1,0 +1,73 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// A secret may come from the variable itself or from a file named in NAME_FILE (Docker secrets).
+function secret(env, name) {
+  const file = env[`${name}_FILE`];
+  if (file) return readFileSync(file, 'utf8').trim();
+  return env[name] ?? '';
+}
+
+function integer(env, name, fallback, min, max) {
+  if (env[name] === undefined || env[name] === '') return fallback;
+  const value = Number(env[name]);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} muss eine ganze Zahl zwischen ${min} und ${max} sein`);
+  }
+  return value;
+}
+
+function boolean(env, name, fallback) {
+  const value = env[name];
+  if (value === undefined || value === '') return fallback;
+  if (['true', '1'].includes(value)) return true;
+  if (['false', '0'].includes(value)) return false;
+  throw new Error(`${name} muss true oder false sein`);
+}
+
+function list(env, name) {
+  return (env[name] ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function httpsUrl(value) {
+  try {
+    const url = new URL(value);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return url.protocol === 'https:' || (url.protocol === 'http:' && local);
+  } catch {
+    return false;
+  }
+}
+
+// Reads all settings in one place and fails at start-up on invalid values.
+export function loadConfig(env = process.env) {
+  const oidc = {
+    enabled: boolean(env, 'OIDC_ENABLED', false),
+    issuerUrl: env.OIDC_ISSUER_URL ?? '',
+    clientId: env.OIDC_CLIENT_ID ?? '',
+    clientSecret: secret(env, 'OIDC_CLIENT_SECRET'),
+    redirectUrl: env.OIDC_REDIRECT_URL ?? '',
+    scopes: env.OIDC_SCOPES ?? 'openid profile email',
+  };
+
+  // Login is not implemented yet. Refusing to start keeps a half-configured login from looking active.
+  if (oidc.enabled) throw new Error('OIDC_ENABLED=true: Anmeldung ist noch nicht implementiert');
+  // The settings are prepared but inactive. Checking the URLs now catches typos before login is switched on.
+  if (oidc.issuerUrl && !httpsUrl(oidc.issuerUrl)) throw new Error('OIDC_ISSUER_URL muss https sein');
+  if (oidc.redirectUrl && !httpsUrl(oidc.redirectUrl)) throw new Error('OIDC_REDIRECT_URL muss https sein');
+
+  return {
+    nodeEnv: env.NODE_ENV ?? 'development',
+    port: integer(env, 'PORT', 3001, 1, 65535),
+    host: env.HOST ?? '127.0.0.1',
+    dbPath: env.DB_PATH ?? path.join(root, 'usage.db'),
+    allowedHosts: list(env, 'ALLOWED_HOSTS'),
+    backupLimitMb: integer(env, 'BACKUP_LIMIT_MB', 25, 1, 100),
+    oidc,
+  };
+}
+
+export const config = loadConfig();
