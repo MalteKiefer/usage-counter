@@ -31,7 +31,7 @@ calculation changes in `src/lib/*.test.js`.
 - Keep one logical change per pull request.
 - Describe what changed and why, and how you tested it.
 - Every pull request needs a passing CI run and a review from the code owner.
-- Do not commit local data or configuration: `oil.db`, `.env` and `.claude/` are ignored.
+- Do not commit local data or configuration: `usage.db`, `.env` and `.claude/` are ignored.
 
 ## Commit messages
 

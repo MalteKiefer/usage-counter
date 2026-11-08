@@ -63,7 +63,7 @@ export function loadConfig(env = process.env) {
     nodeEnv: env.NODE_ENV ?? 'development',
     port: integer(env, 'PORT', 3001, 1, 65535),
     host: env.HOST ?? '127.0.0.1',
-    dbPath: env.OIL_DB ?? path.join(root, 'oil.db'),
+    dbPath: env.DB_PATH ?? path.join(root, 'usage.db'),
     allowedHosts: list(env, 'ALLOWED_HOSTS'),
     backupLimitMb: integer(env, 'BACKUP_LIMIT_MB', 25, 1, 100),
     oidc,

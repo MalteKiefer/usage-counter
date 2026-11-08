@@ -46,7 +46,7 @@ old.exec(`
 `);
 old.close();
 
-process.env.OIL_DB = file;
+process.env.DB_PATH = file;
 const { db } = await import('./db.js');
 
 after(() => {

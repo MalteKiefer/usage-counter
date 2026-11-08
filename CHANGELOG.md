@@ -4,7 +4,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] 2026-11-08
+
+### Changed (breaking)
+
+- The database file is `usage.db` and the variable is `DB_PATH` (was `oil.db` and `OIL_DB`).
+- The Compose data volume is `data` (was `oil-data`). Copy existing data once, see README.
 
 ### Added
 
@@ -12,10 +17,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Secrets can be read from files via `NAME_FILE`.
 - Prepared single sign-on settings for Pocket-ID. Login is not active yet.
 - `.env.example` documents all settings.
-
-### Changed
-
-- The Compose data volume is named `data`, so it does not imply a single meter type. Existing data under `usage-counter_oil-data` must be copied once.
 
 ## [1.2.0] 2026-11-08
 

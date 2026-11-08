@@ -44,7 +44,14 @@ USAGE_COUNTER_VERSION=1.2.0 docker compose up -d
 Open **http://127.0.0.1:8080**. Data lives in the Docker volume `data`.
 
 > [!NOTE]
-> Earlier versions used the volume `usage-counter_oil-data`. To keep that data, copy it into the volume `usage-counter_data` before the first start.
+> [!IMPORTANT]
+> Version 2 renamed the volume to `data`, the database file to `usage.db` and the variable to `DB_PATH`.
+> To keep existing data, copy the old file into the new volume once:
+>
+> ```bash
+> docker run --rm -v usage-counter_oil-data:/from -v usage-counter_data:/to alpine \
+>   sh -c 'cp /from/oil.db /to/usage.db'
+> ```
 
 To build from source instead: `docker compose up -d --build`.
 
@@ -82,7 +89,7 @@ Invalid values stop the server at start-up with a message that names the variabl
 |---|---|---|
 | `PORT` | `3001` | Port of the API server |
 | `HOST` | `127.0.0.1` | Interface to bind. The container sets `0.0.0.0` |
-| `OIL_DB` | `./oil.db` | Path of the SQLite database file |
+| `DB_PATH` | `./usage.db` | Path of the SQLite database file |
 | `ALLOWED_HOSTS` | *(empty)* | Extra host names accepted in the Host header, comma separated |
 | `BACKUP_LIMIT_MB` | `25` | Largest backup that can be exported or restored, 1 to 100 |
 | `NODE_ENV` | *(unset)* | `production` serves the built web app from `dist/` |
