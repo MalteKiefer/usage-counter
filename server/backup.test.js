@@ -140,3 +140,30 @@ test('restore rejects a refill meter value outside the oil readings around it', 
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
 });
+
+function timeOrderBackup(refillMeter) {
+  return {
+    format: 'usage-counter-backup',
+    version: 1,
+    data: {
+      objects: [{ id: 500, name: 'Zeit', tank_size: null }],
+      meters: [{ id: 500, object_id: 500, kind: 'oil', name: 'Heizöl', sub_of: null }],
+      readings: [
+        { id: 1, meter_id: 500, read_at: '2020-01-01T08:00', meter: 100, tank_level: null, note: '' },
+        { id: 2, meter_id: 500, read_at: '2020-02-01T08:00', meter: 200, tank_level: null, note: '' },
+        { id: 3, meter_id: 500, read_at: '2020-01-15T08:00', meter: 150, tank_level: null, note: '' },
+      ],
+      refills: [
+        { id: 1, object_id: 500, filled_at: '2020-02-15T08:00', meter: refillMeter, liters: 10, total_eur: null, level_after: null, note: '' },
+      ],
+      tank_levels: [],
+    },
+  };
+}
+
+test('restore checks refill meters against readings in time order, not id order', async () => {
+  const below = await send('POST', '/api/restore?confirm=replace', timeOrderBackup(180));
+  assert.equal(below.status, 422);
+  const above = await send('POST', '/api/restore?confirm=replace', timeOrderBackup(210));
+  assert.equal(above.status, 200);
+});

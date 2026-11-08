@@ -49,7 +49,6 @@ function rowsOf(data, table) {
   return rows;
 }
 
-// Ids must be unique positive integers within their table.
 function checkIds(rows, table) {
   const seen = new Set();
   for (const row of rows) {
@@ -106,7 +105,8 @@ export function parseBackup(body) {
   });
   const readingKeys = new Set(readings.map((r) => `${r.meter_id}|${r.read_at}`));
   if (readingKeys.size !== readings.length) fail('readings: doppelte Ablesung');
-  checkSeries(readings);
+  const series = seriesByMeter(readings);
+  checkSeries(series);
 
   const refills = data.refills;
   checkIds(refills, 'refills');
@@ -114,14 +114,18 @@ export function parseBackup(body) {
     if (!tankSizes.has(f.object_id)) return `Objekt ${f.object_id} fehlt`;
     return validateRefill(f, tankSizes.get(f.object_id));
   });
-  // A refill meter value must fit between the oil readings around it, like a reading does.
+  // Like the API, a refill meter value is checked against the oil meter with the lowest id.
+  const oilOf = new Map();
+  for (const m of [...meters].sort((a, b) => a.id - b.id)) {
+    if (m.kind === 'oil' && !oilOf.has(m.object_id)) oilOf.set(m.object_id, m);
+  }
   for (const f of refills) {
     if (f.meter == null) continue;
-    const oil = meters.find((m) => m.object_id === f.object_id && m.kind === 'oil');
+    const oil = oilOf.get(f.object_id);
     if (!oil) continue;
-    const series = readings.filter((r) => r.meter_id === oil.id);
-    const prev = series.filter((r) => r.read_at < f.filled_at).at(-1) ?? null;
-    const next = series.find((r) => r.read_at > f.filled_at) ?? null;
+    const oilSeries = series.get(oil.id) ?? [];
+    const prev = oilSeries.filter((r) => r.read_at < f.filled_at).at(-1) ?? null;
+    const next = oilSeries.find((r) => r.read_at > f.filled_at) ?? null;
     const error = neighbourError(prev, next, f.meter);
     if (error) fail(`refills ${f.id}: ${error}`);
   }
@@ -138,14 +142,22 @@ export function parseBackup(body) {
   return data;
 }
 
-// Meter values of one meter must not decrease over time.
-function checkSeries(readings) {
+// Backups list rows by id, not by time, so each meter's readings are put in time order first.
+function seriesByMeter(readings) {
   const byMeter = new Map();
   for (const r of readings) {
-    byMeter.set(r.meter_id, [...(byMeter.get(r.meter_id) ?? []), r]);
+    const series = byMeter.get(r.meter_id);
+    if (series) series.push(r);
+    else byMeter.set(r.meter_id, [r]);
   }
   for (const series of byMeter.values()) {
     series.sort((a, b) => (a.read_at < b.read_at ? -1 : a.read_at > b.read_at ? 1 : 0));
+  }
+  return byMeter;
+}
+
+function checkSeries(byMeter) {
+  for (const series of byMeter.values()) {
     for (let i = 1; i < series.length; i++) {
       if (series[i].meter < series[i - 1].meter) {
         fail(`readings ${series[i].id}: ${neighbourError(series[i - 1], null, series[i].meter)}`);

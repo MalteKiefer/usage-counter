@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createMeter,
   createObject,
@@ -73,6 +73,7 @@ export default function App() {
   const [panel, setPanel] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState(null);
+  const menuToggle = useRef(null);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -159,7 +160,9 @@ export default function App() {
     setPrefs(next);
   }
 
+  // Focus moves to the menu button first, so the dialog returns focus there when it closes.
   function openPanel(name) {
+    menuToggle.current?.focus();
     setMenuOpen(false);
     setPanel(name);
   }
@@ -238,7 +241,12 @@ export default function App() {
             <span className="flame">🔥</span> {t('app.title')}
           </h1>
           <div className="menu">
-            <button className="ghost" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+            <button
+              ref={menuToggle}
+              className="ghost"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
               {t('menu.manage')} ▾
             </button>
               {menuOpen && (
