@@ -24,8 +24,24 @@ test('ALLOWED_HOSTS is a trimmed list', () => {
   assert.deepEqual(loadConfig({ ALLOWED_HOSTS: ' nas.lan , , box.local ' }).allowedHosts, ['nas.lan', 'box.local']);
 });
 
-test('enabling OIDC fails until login exists', () => {
-  assert.throws(() => loadConfig({ OIDC_ENABLED: 'true' }), /noch nicht implementiert/);
+test('enabling OIDC requires issuer, client, secret and redirect', () => {
+  assert.throws(() => loadConfig({ OIDC_ENABLED: 'true' }), /OIDC_ISSUER_URL.*OIDC_CLIENT_ID.*OIDC_REDIRECT_URL.*OIDC_ALLOWED_EMAILS/);
+  const complete = {
+    OIDC_ENABLED: 'true',
+    OIDC_ISSUER_URL: 'https://id.example.org',
+    OIDC_CLIENT_ID: 'usage',
+    OIDC_CLIENT_SECRET: 'geheim',
+    OIDC_REDIRECT_URL: 'https://usage.example.org/auth/callback',
+    OIDC_ALLOWED_EMAILS: 'anna@example.org',
+  };
+  const c = loadConfig(complete);
+  assert.equal(c.oidc.enabled, true);
+  assert.equal(c.oidc.cookieSecure, true);
+  assert.equal(c.oidc.sessionDays, 7);
+});
+
+test('allowed e-mail addresses are lower-cased', () => {
+  assert.deepEqual(loadConfig({ OIDC_ALLOWED_EMAILS: 'Anna@Example.org, bo@example.org' }).oidc.allowedEmails, ['anna@example.org', 'bo@example.org']);
 });
 
 test('prepared OIDC URLs must be https', () => {

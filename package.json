@@ -1,6 +1,6 @@
 {
   "name": "usage-counter",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Heizöl, Wasser und Strom erfassen, auswerten und Reichweite prognostizieren. Mehrere Objekte, Zähler mit Untermessern, Tankstand-Schätzung.",
   "license": "MIT",
   "author": "Malte Kiefer",
@@ -30,11 +30,12 @@
     "dev": "concurrently -n api,web \"node --watch server/index.js\" \"vite\"",
     "build": "vite build",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "node --test src/lib/derive.test.js src/lib/tank.test.js src/lib/water.test.js src/lib/format.test.js server/config.test.js server/api.test.js server/db.test.js server/backup.test.js",
+    "test": "node --test src/lib/derive.test.js src/lib/tank.test.js src/lib/water.test.js src/lib/format.test.js server/config.test.js server/api.test.js server/db.test.js server/backup.test.js server/auth.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
     "express": "^5.3.0",
+    "openid-client": "^6.8.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "recharts": "^3.10.1"

@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] Unreleased
+
+### Added
+
+- Sign-in with Pocket-ID (OpenID Connect, PKCE). Enabled with `OIDC_ENABLED=true`.
+- Only the mail addresses in `OIDC_ALLOWED_EMAILS` can sign in. The list is required when sign-in is enabled.
+- Language and number and date formats are stored per account when signed in.
+- `SESSION_DAYS` sets how long a sign-in lasts (default 7).
+
+### Security
+
+- With sign-in enabled, every API call needs a session. Writes from other origins are refused.
+- Session tokens are stored only as hashes. Profile pictures are fetched from the issuer only, with a size limit.
+
 ## [2.0.0] 2026-11-08
 
 ### Changed (breaking)

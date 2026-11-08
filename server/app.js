@@ -13,6 +13,7 @@ import {
   validateTankLevel,
 } from './rules.js';
 import { BackupError, exportBackup, restoreBackup } from './backup.js';
+import { authRouter, checkOrigin, loadUser, requireLogin, sessionView } from './auth.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const app = express();
@@ -121,6 +122,12 @@ app.use((_req, res, next) => {
 const jsonDefault = express.json();
 app.use('/api/restore', express.json({ limit: BACKUP_LIMIT_BYTES }));
 app.use((req, res, next) => (req.path.startsWith('/api/restore') ? next() : jsonDefault(req, res, next)));
+
+app.use(checkOrigin);
+app.use(loadUser);
+app.get('/api/session', (req, res) => res.json(sessionView(req.user)));
+if (config.oidc.enabled) app.use(authRouter);
+app.use('/api', requireLogin);
 
 app.get('/api/backup', (_req, res) => {
   const body = JSON.stringify(exportBackup());

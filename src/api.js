@@ -40,3 +40,7 @@ export const fetchBackup = () => request('/api/backup', undefined, (res) => res.
 
 export const restoreBackup = (text) =>
   request('/api/restore?confirm=replace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text });
+
+export const fetchSession = () => request('/api/session');
+export const savePreferences = (prefs) => request('/api/me/preferences', json('PUT', prefs));
+export const logout = () => request('/auth/logout', { method: 'POST' });

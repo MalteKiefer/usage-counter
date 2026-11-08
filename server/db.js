@@ -51,6 +51,33 @@ const SCHEMA = `
     UNIQUE (object_id, read_at)
   );
 
+  -- Accounts exist only when OIDC is enabled. Preferences are stored as JSON per account.
+  CREATE TABLE IF NOT EXISTS users (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    issuer  TEXT    NOT NULL,
+    sub     TEXT    NOT NULL,
+    email   TEXT    NOT NULL,
+    name    TEXT    NOT NULL,
+    picture TEXT,                               -- data URL, copied once at sign-in
+    prefs   TEXT    NOT NULL DEFAULT '{}',
+    UNIQUE (issuer, sub)
+  );
+
+  -- Only a SHA-256 hash of the session token is stored, never the token itself.
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT    PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL                 -- epoch milliseconds
+  );
+
+  -- State, nonce and PKCE verifier of a sign-in in progress; each is used once.
+  CREATE TABLE IF NOT EXISTS login_states (
+    state      TEXT    PRIMARY KEY,
+    nonce      TEXT    NOT NULL,
+    verifier   TEXT    NOT NULL,
+    created_at INTEGER NOT NULL                 -- epoch milliseconds
+  );
+
   CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value REAL NOT NULL

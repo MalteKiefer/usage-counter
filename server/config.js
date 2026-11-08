@@ -51,13 +51,24 @@ export function loadConfig(env = process.env) {
     clientSecret: secret(env, 'OIDC_CLIENT_SECRET'),
     redirectUrl: env.OIDC_REDIRECT_URL ?? '',
     scopes: env.OIDC_SCOPES ?? 'openid profile email',
+    allowedEmails: list(env, 'OIDC_ALLOWED_EMAILS').map((email) => email.toLowerCase()),
+    sessionDays: integer(env, 'SESSION_DAYS', 7, 1, 30),
   };
 
-  // Login is not implemented yet. Refusing to start keeps a half-configured login from looking active.
-  if (oidc.enabled) throw new Error('OIDC_ENABLED=true: Anmeldung ist noch nicht implementiert');
-  // The settings are prepared but inactive. Checking the URLs now catches typos before login is switched on.
-  if (oidc.issuerUrl && !httpsUrl(oidc.issuerUrl)) throw new Error('OIDC_ISSUER_URL muss https sein');
-  if (oidc.redirectUrl && !httpsUrl(oidc.redirectUrl)) throw new Error('OIDC_REDIRECT_URL muss https sein');
+  // Only the listed mail addresses may sign in: a Pocket-ID instance can hold more users than this app should serve.
+  if (oidc.enabled) {
+    const missing = [
+      ['OIDC_ISSUER_URL', oidc.issuerUrl],
+      ['OIDC_CLIENT_ID', oidc.clientId],
+      ['OIDC_CLIENT_SECRET (or OIDC_CLIENT_SECRET_FILE)', oidc.clientSecret],
+      ['OIDC_REDIRECT_URL', oidc.redirectUrl],
+      ['OIDC_ALLOWED_EMAILS', oidc.allowedEmails.length],
+    ].filter(([, value]) => !value).map(([name]) => name);
+    if (missing.length) throw new Error(`OIDC_ENABLED=true, es fehlt: ${missing.join(', ')}`);
+  }
+  if (oidc.issuerUrl && !httpsUrl(oidc.issuerUrl)) throw new Error('OIDC_ISSUER_URL muss https sein (oder http auf localhost)');
+  if (oidc.redirectUrl && !httpsUrl(oidc.redirectUrl)) throw new Error('OIDC_REDIRECT_URL muss https sein (oder http auf localhost)');
+  oidc.cookieSecure = oidc.redirectUrl.startsWith('https://');
 
   return {
     nodeEnv: env.NODE_ENV ?? 'development',
