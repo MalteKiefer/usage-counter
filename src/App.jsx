@@ -24,6 +24,7 @@ import {
 } from './api.js';
 import { BackupPanel, MeterPanel, ObjectPanel, SettingsPanel } from './components/Panels.jsx';
 import LoginScreen from './components/LoginScreen.jsx';
+import { ConfirmProvider, confirm } from './components/ConfirmDialog.jsx';
 import Modal from './components/Modal.jsx';
 import { I18nContext, translator } from './i18n.js';
 import { loadPrefs, loadSelectedObject, savePrefs, saveSelectedObject } from './lib/prefs.js';
@@ -234,7 +235,7 @@ function Main({ user }) {
       await refreshObject();
     },
     remove: async (endpoint, id) => {
-      if (!window.confirm(t('app.deleteEntry'))) return;
+      if (!(await confirm(t('app.deleteEntry')))) return;
       try {
         await DELETE_ENDPOINTS[endpoint](id);
         await refreshObject();
@@ -283,6 +284,7 @@ function Main({ user }) {
 
   return (
     <I18nContext.Provider value={t}>
+      <ConfirmProvider t={t}>
       <div className="app" lang={prefs.lang}>
         <header className="appbar">
           <h1 className="brand">
@@ -417,6 +419,7 @@ function Main({ user }) {
           </span>
         </footer>
       </div>
+      </ConfirmProvider>
     </I18nContext.Provider>
   );
 }

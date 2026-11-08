@@ -5,6 +5,7 @@ import { tankUnitLabel } from '../lib/units.js';
 import { DEFAULT_LPG_DENSITY, SERIAL_KINDS, TANK_KINDS } from '../lib/meters.js';
 import { CURRENCIES, DATE_ORDERS, LANGUAGES, NUMBER_LOCALES } from '../lib/locale.js';
 import { errorText, fetchBackup, restoreBackup } from '../api.js';
+import { confirm } from './ConfirmDialog.jsx';
 
 // Create a new object, or edit the selected one.
 export function ObjectPanel({ object, onSave, onDelete, onClose }) {
@@ -24,7 +25,7 @@ export function ObjectPanel({ object, onSave, onDelete, onClose }) {
   }
 
   async function remove() {
-    if (!window.confirm(t('object.deleteConfirm', { name: object.name }))) return;
+    if (!(await confirm(t('object.deleteConfirm', { name: object.name })))) return;
     try {
       await onDelete(object.id);
       onClose();
@@ -135,7 +136,7 @@ export function MeterPanel({ meters, onAdd, onUpdate, onDelete }) {
   }
 
   async function remove(meter) {
-    if (!window.confirm(t('meter.deleteConfirm', { name: meter.name }))) return;
+    if (!(await confirm(t('meter.deleteConfirm', { name: meter.name })))) return;
     try {
       await onDelete(meter.id);
     } catch (err) {
@@ -386,7 +387,7 @@ export function BackupPanel({ onRestored, onClose }) {
     if (!file) return;
     setError(null);
     setMessage(null);
-    if (!window.confirm(t('backup.restoreConfirm'))) return;
+    if (!(await confirm(t('backup.restoreConfirm')))) return;
     try {
       const counts = await restoreBackup(await file.text());
       setMessage(t('backup.done', counts));

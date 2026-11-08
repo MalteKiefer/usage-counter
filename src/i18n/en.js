@@ -238,4 +238,5 @@ export default {
   'tank.equivalent': '≈ {value} {unit} at {density} kg/l',
   'form.meterValue': 'Meter reading in {unit}',
   'form.example': 'e.g. {v}',
+  'common.confirm': 'Confirm',
 };
