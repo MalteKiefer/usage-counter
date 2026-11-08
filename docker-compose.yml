@@ -2,7 +2,7 @@ name: usage-counter
 
 services:
   app:
-    image: ghcr.io/maltekiefer/usage-counter:${USAGE_COUNTER_VERSION:-2.1.0}
+    image: ghcr.io/maltekiefer/usage-counter:${USAGE_COUNTER_VERSION:-2.1.1}
     build:
       context: .
     restart: unless-stopped

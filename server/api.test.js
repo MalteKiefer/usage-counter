@@ -200,6 +200,10 @@ test('deleting a meter removes its readings', async () => {
   assert.equal(left.some((r) => r.meter_id === meters.power), false);
 });
 
+test('session endpoint reports that sign-in is off, without a user', async () => {
+  assert.deepEqual(await getJson('/api/session'), { auth: { enabled: false }, user: null });
+});
+
 test('answers only to local host names', async () => {
   const status = await new Promise((resolve, reject) => {
     const req = http.get(`${base}/api/objects`, { headers: { Host: 'evil.test' } }, (res) => {

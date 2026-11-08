@@ -124,8 +124,9 @@ app.use('/api/restore', express.json({ limit: BACKUP_LIMIT_BYTES }));
 app.use((req, res, next) => (req.path.startsWith('/api/restore') ? next() : jsonDefault(req, res, next)));
 
 app.use(checkOrigin);
-app.use(loadUser);
-app.get('/api/session', (req, res) => res.json(sessionView(req.user)));
+app.use(['/api', '/auth'], loadUser);
+// Personal data: never cached by browsers or proxies.
+app.get('/api/session', (req, res) => res.set('Cache-Control', 'no-store').json(sessionView(req.user)));
 if (config.oidc.enabled) app.use(authRouter);
 app.use('/api', requireLogin);
 

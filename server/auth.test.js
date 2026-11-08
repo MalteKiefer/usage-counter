@@ -144,15 +144,22 @@ const call = (method, url, { cookie, body, origin = APP_ORIGIN } = {}) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-// Runs the browser steps: login redirect, approval at the issuer, callback into the app.
-async function signIn(email = 'anna@example.org') {
-  mockUser = { email, picture: `${issuer}/pic.png` };
+// Starts a sign-in the way the browser does: returns the login cookie and the callback URL after approval.
+async function startLogin(extra = {}) {
+  mockUser = { email: 'anna@example.org', picture: `${issuer}/pic.png`, ...extra };
   const login = await call('GET', '/auth/login');
+  const loginCookie = login.headers.get('set-cookie').match(/usage_login=([^;]+)/)[0];
   const approved = await fetch(login.headers.get('location'), { redirect: 'manual' });
-  const callback = approved.headers.get('location');
+  return { loginCookie, callback: approved.headers.get('location').replace(APP_ORIGIN, base) };
+}
+
+// Runs the browser steps: login redirect, approval at the issuer, callback into the app.
+async function signIn(email = 'anna@example.org', extra = {}) {
+  const { loginCookie, callback } = await startLogin({ email, ...extra });
   return {
-    res: await fetch(callback.replace(APP_ORIGIN, base), { redirect: 'manual' }),
+    res: await fetch(callback, { redirect: 'manual', headers: { Cookie: loginCookie } }),
     callback,
+    loginCookie,
   };
 }
 
@@ -166,9 +173,10 @@ test('API answers 401 without login', async () => {
   assert.equal((await call('GET', '/api/objects', { origin: null })).status, 401);
 });
 
-test('session endpoint is open and reports no user', async () => {
-  const body = await (await call('GET', '/api/session', { origin: null })).json();
-  assert.deepEqual(body, { auth: { enabled: true }, user: null });
+test('session endpoint is open, reports no user and is not cached', async () => {
+  const res = await call('GET', '/api/session', { origin: null });
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await res.json(), { auth: { enabled: true }, user: null });
 });
 
 test('login redirects to the issuer with PKCE and state', async () => {
@@ -206,9 +214,17 @@ test('session token is stored only as a hash', async () => {
 });
 
 test('a login state works only once', async () => {
-  const { callback } = await signIn();
-  const replay = await fetch(callback.replace(APP_ORIGIN, base), { redirect: 'manual' });
+  const { callback, loginCookie } = await signIn();
+  const replay = await fetch(callback, { redirect: 'manual', headers: { Cookie: loginCookie } });
   assert.equal(replay.headers.get('location'), '/?login=failed');
+});
+
+test('callback from another browser is refused and does not use up the sign-in', async () => {
+  const { loginCookie, callback } = await startLogin();
+  const forged = await fetch(callback, { redirect: 'manual' });
+  assert.equal(forged.headers.get('location'), '/?login=failed');
+  const genuine = await fetch(callback, { redirect: 'manual', headers: { Cookie: loginCookie } });
+  assert.equal(genuine.headers.get('location'), '/');
 });
 
 test('mail address not on the allow list gets no session', async () => {
@@ -218,23 +234,26 @@ test('mail address not on the allow list gets no session', async () => {
 });
 
 test('unverified mail address gets no session', async () => {
-  mockUser = { email: 'anna@example.org', picture: null, emailVerified: false };
-  const login = await call('GET', '/auth/login');
-  const approved = await fetch(login.headers.get('location'), { redirect: 'manual' });
-  const res = await fetch(approved.headers.get('location').replace(APP_ORIGIN, base), { redirect: 'manual' });
+  const { res } = await signIn('anna@example.org', { emailVerified: false });
   assert.equal(res.headers.get('location'), '/?login=denied');
   assert.equal(sessionCookieOf(res), null);
-  mockUser = { email: 'anna@example.org', picture: null };
 });
 
 test('picture from another host is not fetched', async () => {
-  mockUser = { email: 'anna@example.org', picture: 'http://127.0.0.1:1/evil.png' };
-  const login = await call('GET', '/auth/login');
-  const approved = await fetch(login.headers.get('location'), { redirect: 'manual' });
-  const res = await fetch(approved.headers.get('location').replace(APP_ORIGIN, base), { redirect: 'manual' });
+  const { db } = await import('./db.js');
+  db.prepare('UPDATE users SET picture = NULL').run();
+  const { res } = await signIn('anna@example.org', { picture: 'http://127.0.0.1:1/evil.png' });
   const cookie = sessionCookieOf(res);
   const session = await (await call('GET', '/api/session', { cookie, origin: null })).json();
   assert.equal(session.user.picture, null);
+});
+
+test('failed picture fetch keeps the picture of an earlier sign-in', async () => {
+  await signIn('anna@example.org');
+  const { res } = await signIn('anna@example.org', { picture: 'http://127.0.0.1:1/evil.png' });
+  const cookie = sessionCookieOf(res);
+  const session = await (await call('GET', '/api/session', { cookie, origin: null })).json();
+  assert.match(session.user.picture, /^data:image\/png;base64,/);
 });
 
 test('writes need the app origin', async () => {
@@ -255,6 +274,14 @@ test('preferences are stored per account and validated', async () => {
   assert.equal(ok.status, 200);
   const session = await (await call('GET', '/api/session', { cookie, origin: null })).json();
   assert.deepEqual(session.user.prefs, { lang: 'en', numbers: 'en', dates: 'ymd' });
+});
+
+test('signing in again ends the earlier session of the same browser', async () => {
+  const { res: firstRes } = await signIn();
+  const oldCookie = sessionCookieOf(firstRes);
+  const { loginCookie, callback } = await startLogin();
+  await fetch(callback, { redirect: 'manual', headers: { Cookie: `${loginCookie}; ${oldCookie}` } });
+  assert.equal((await call('GET', '/api/objects', { cookie: oldCookie, origin: null })).status, 401);
 });
 
 test('logout ends the session', async () => {
