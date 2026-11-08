@@ -5,4 +5,4 @@ import { config } from './config.js';
 const { port, host } = config;
 
 await initAuth();
-app.listen(port, host, () => console.log(`API läuft auf http://${host}:${port}`));
+app.listen(port, host, () => console.log(`API listening on http://${host}:${port}`));

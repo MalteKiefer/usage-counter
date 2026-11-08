@@ -4,7 +4,7 @@ import { useSubmit } from '../lib/useSubmit.js';
 import { useT } from '../i18n.js';
 
 // Gauge value on its own. It anchors the estimate only with a meter reading in the same minute.
-export default function TankLevelForm({ onSave }) {
+export default function TankLevelForm({ unit, onSave }) {
   const t = useT();
   const [readAt, setReadAt] = useState(nowLocalInput);
   const [level, setLevel] = useState('');
@@ -34,11 +34,11 @@ export default function TankLevelForm({ onSave }) {
         <input type="datetime-local" value={readAt} onChange={(e) => setReadAt(e.target.value)} required />
       </label>
       <label>
-        {t('form.gaugeLevel')}
+        {t('form.gaugeLevel')} ({unit})
         <input
           type="text"
           inputMode="decimal"
-          placeholder="z. B. 420"
+          placeholder={t('form.example', { v: fmt(420, 0) })}
           value={level}
           onChange={(e) => setLevel(e.target.value)}
           required

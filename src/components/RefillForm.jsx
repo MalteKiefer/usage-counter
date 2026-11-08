@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { fmtMoney, nowLocalInput, parseNumber } from '../lib/format.js';
+import { fmt, fmtMoney, nowLocalInput, parseNumber } from '../lib/format.js';
 import { useSubmit } from '../lib/useSubmit.js';
 import { useT } from '../i18n.js';
 
-export default function RefillForm({ onSave }) {
+export default function RefillForm({ unit, meterUnit, onSave }) {
   const t = useT();
   const [filledAt, setFilledAt] = useState(nowLocalInput);
   const [meter, setMeter] = useState('');
@@ -53,21 +53,21 @@ export default function RefillForm({ onSave }) {
         <input type="datetime-local" value={filledAt} onChange={(e) => setFilledAt(e.target.value)} required />
       </label>
       <label>
-        {t('form.refillMeter')}
+        {t('form.refillMeter', { unit: meterUnit })}
         <input
           type="text"
           inputMode="decimal"
-          placeholder="z. B. 2119,3"
+          placeholder={t('form.example', { v: fmt(2119.3, 1) })}
           value={meter}
           onChange={(e) => setMeter(e.target.value)}
         />
       </label>
       <label>
-        {t('form.liters')}
+        {t('form.liters')} ({unit})
         <input
           type="text"
           inputMode="decimal"
-          placeholder="z. B. 2500"
+          placeholder={t('form.example', { v: fmt(2500, 0) })}
           value={liters}
           onChange={(e) => setLiters(e.target.value)}
           required
@@ -78,13 +78,13 @@ export default function RefillForm({ onSave }) {
         <input
           type="text"
           inputMode="decimal"
-          placeholder="z. B. 2100,50"
+          placeholder={t('form.example', { v: fmt(2100.5, 2) })}
           value={total}
           onChange={(e) => setTotal(e.target.value)}
         />
       </label>
       <label>
-        {t('form.levelAfter')}
+        {t('form.levelAfter', { unit })}
         <input
           type="text"
           inputMode="decimal"
@@ -101,7 +101,7 @@ export default function RefillForm({ onSave }) {
       {pricePerLiter !== null && Number.isFinite(pricePerLiter) && (
         <div className="preview">
           <strong>{fmtMoney(pricePerLiter)}</strong>
-          <span className="muted"> {t('form.perLiter')}</span>
+          <span className="muted"> {t('form.perLiter', { unit })}</span>
         </div>
       )}
       {error && <div className="banner error">{error}</div>}

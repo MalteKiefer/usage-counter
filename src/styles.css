@@ -843,3 +843,9 @@ button.icon.danger:hover {
     display: none;
   }
 }
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

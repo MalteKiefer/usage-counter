@@ -1,4 +1,4 @@
-import { fmt, fmtMonth, fmtShortDate } from './format.js';
+import { fmt, fmtMonth, fmtShortDate, weekdayLabel } from './format.js';
 import { weekdayAverages } from './derive.js';
 
 export const SERIES = { flame: '#ff8a3d', teal: '#4fd1c5', violet: '#a78bfa', sky: '#7dd3fc' };
@@ -47,7 +47,7 @@ function weekdayChart(intervals, dayUnit, digits, t) {
     digits,
     series: [{ key: 'rate', name: dayUnit, color: SERIES.sky }],
     data: weekdayAverages(intervals).map((w) => ({
-      label: t(`weekday.${w.index}`),
+      label: weekdayLabel(w.index),
       rate: w.perDay == null ? null : round(w.perDay, digits),
     })),
   };
@@ -88,14 +88,14 @@ export function meterCharts(intervals, monthlyTotals, { unit, dayUnit, digits },
   ];
 }
 
-export function tankChart(levels, t) {
+export function tankChart(levels, t, unit) {
   return {
     id: 'tank',
     label: t('chart.tank.label'),
     title: t('chart.tank.title'),
     subtitle: t('chart.tank.sub'),
     kind: 'area',
-    unit: 'L',
+    unit,
     digits: 1,
     connectNulls: true,
     series: [{ key: 'value', name: t('chart.tank.name'), color: SERIES.sky }],
@@ -104,8 +104,7 @@ export function tankChart(levels, t) {
 }
 
 // House and garden share per interval, next to the main meter totals.
-export function waterCharts(paired, monthlyTotals, { digits }, t) {
-  const unit = 'm³';
+export function waterCharts(paired, monthlyTotals, { unit, digits }, t) {
   return [
     {
       id: 'split',

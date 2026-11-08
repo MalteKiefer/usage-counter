@@ -26,6 +26,13 @@ npm run build
 Behaviour changes need tests. Server changes are covered in `server/*.test.js`,
 calculation changes in `src/lib/*.test.js`.
 
+## Languages, formats and units
+
+- Languages: add `src/i18n/<code>.js` with the same keys as `src/i18n/de.js`, then an entry in `LANGUAGES` in `src/lib/locale.js`. The test in `src/i18n.test.js` fails until the keys match.
+- Number formats, date orders and currencies are lists in `src/lib/locale.js`. Number and date output comes from `Intl`, so new entries need no code.
+- Units: meter kinds and tank units are in `src/lib/units.js`. Unit text comes from `Intl` where it exists; units missing from `Intl` have a fixed symbol in `src/lib/format.js`.
+- Errors: the server answers with a code and parameters (`err.<code>` in the dictionaries). Add a new code to every language file.
+
 ## Pull requests
 
 - Keep one logical change per pull request.
