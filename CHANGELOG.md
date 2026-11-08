@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.2] 2026-11-08
+
+### Fixed
+
+- Confirmation dialog: focus returns to the control that asked, a question is answered when the dialog closes or the app unmounts, and the dialog is labelled by its question.
+
 ## [3.0.1] 2026-11-08
 
 ### Fixed
