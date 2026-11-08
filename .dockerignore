@@ -1,0 +1,10 @@
+.git
+.github
+.claude
+node_modules
+dist
+oil.db*
+*.log
+.env
+.env.*
+coverage

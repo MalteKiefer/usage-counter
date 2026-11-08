@@ -1,0 +1,19 @@
+# dependencies and build output
+node_modules/
+dist/
+
+# local data: never commit the database
+oil.db
+oil.db-*
+
+# environment and local tooling
+.env
+.env.*
+!.env.example
+.claude/
+.vscode/
+.idea/
+
+# logs and OS files
+*.log
+.DS_Store

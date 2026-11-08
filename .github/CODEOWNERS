@@ -1,0 +1,8 @@
+# Every change needs review from the maintainer.
+*                     @MalteKiefer
+
+# Build, container and CI definitions are security relevant.
+/.github/             @MalteKiefer
+/Dockerfile           @MalteKiefer
+/docker-compose.yml   @MalteKiefer
+/server/              @MalteKiefer
