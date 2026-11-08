@@ -7,4 +7,5 @@ oil.db*
 *.log
 .env
 .env.*
+secrets
 coverage

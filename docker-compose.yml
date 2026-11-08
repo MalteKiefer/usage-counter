@@ -19,11 +19,25 @@ services:
     mem_limit: 1g
     environment:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      BACKUP_LIMIT_MB: ${BACKUP_LIMIT_MB:-25}
+      # Prepared for single sign-on, not active yet. Keep OIDC_ENABLED=false.
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      # OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
     ports:
       # Bound to the host loopback only. The API has no authentication yet.
       - "127.0.0.1:8080:3001"
     volumes:
-      - oil-data:/data
+      - oil:/data
+    # Uncomment once a client secret file exists, see README.
+    # secrets:
+    #   - oidc_client_secret
 
 volumes:
-  oil-data:
+  oil:
+
+# secrets:
+#   oidc_client_secret:
+#     file: ./secrets/oidc_client_secret

@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
+import { config } from './config.js';
 import { isId } from './validation.js';
 import {
   neighbourError,
@@ -18,13 +19,13 @@ export const app = express();
 
 const METER_KINDS = ['oil', 'water', 'power'];
 // Backup export and restore share one size limit, so every exported file can be restored.
-const BACKUP_LIMIT_BYTES = 25 * 1024 * 1024;
+const BACKUP_LIMIT_BYTES = config.backupLimitMb * 1024 * 1024;
 const ALLOWED_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
   '::1',
   '[::1]',
-  ...(process.env.ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean),
+  ...config.allowedHosts,
 ]);
 
 const stmt = {
@@ -316,7 +317,7 @@ app.delete('/api/refills/:id', removeById(stmt.removeRefill));
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Nicht gefunden' }));
 
-if (process.env.NODE_ENV === 'production') {
+if (config.nodeEnv === 'production') {
   app.use(express.static(path.join(root, 'dist')));
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(root, 'dist', 'index.html')));
 }

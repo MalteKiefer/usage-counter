@@ -10,6 +10,7 @@ oil.db-*
 .env
 .env.*
 !.env.example
+secrets/
 .claude/
 .vscode/
 .idea/
