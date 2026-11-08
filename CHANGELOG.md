@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] 2026-11-08
+
+### Added
+
+- Backup of the whole database as a JSON file, and restore from such a file. Restore replaces all
+  data in one transaction and checks every row and reference first.
+
+### Changed
+
+- Object and meter management, backup and settings sit in one menu in a sticky app bar.
+- Management panels open as dialogs that close with Escape or a click outside.
+- Layout works on phones and tablets without horizontal scrolling.
+
+### Fixed
+
+- Numbers typed with a dot in German browsers were read as thousands, for example 816.613 became 816613.
+- Dependency alert for minimatch (development dependency, GHSA-g3hv-75wg-m249) resolved by override.
+
 ## [1.0.1] 2026-11-08
 
 ### Changed

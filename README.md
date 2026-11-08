@@ -11,6 +11,7 @@ per interval, per day and per month, and estimate how long the heating oil in th
 - Oil tank level estimate from refills, meter readings and gauge values, with a forecast of the reach.
 - German and English interface. Number and date formats are chosen per browser.
 - SQLite database, one file, no external services.
+- Backup and restore as a JSON file from the app.
 
 ## Quick start with Docker Compose
 
