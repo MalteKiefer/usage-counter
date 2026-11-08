@@ -70,6 +70,16 @@ export default function App() {
   const [range, setRange] = useState(RANGES[1]);
   const [panel, setPanel] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Clicks outside the menu close it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const close = (e) => {
+      if (!e.target.closest('.menu')) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
   const [error, setError] = useState(null);
 
   const object = objects.find((o) => o.id === objectId) ?? null;
@@ -215,13 +225,31 @@ export default function App() {
   return (
     <I18nContext.Provider value={t}>
       <div className="app" lang={prefs.lang}>
-        <header className="hero">
-          <div>
-            <h1>
-              <span className="flame">🔥</span> {t('app.title')}
-            </h1>
-            <p className="muted">{t('app.subtitle')}</p>
+        <header className="appbar">
+          <div className="brand">
+            <span className="flame">🔥</span> {t('app.title')}
           </div>
+          <div className="menu">
+            <button className="ghost" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+                {t('menu.manage')} ▾
+              </button>
+              {menuOpen && (
+                <div className="menu-list" role="menu">
+                  {object && (
+                    <button role="menuitem" onClick={() => openPanel('object-edit')}>{t('object.edit')}</button>
+                  )}
+                  {object && (
+                    <button role="menuitem" onClick={() => openPanel('meters')}>{t('meter.manage')}</button>
+                  )}
+                  <button role="menuitem" onClick={() => openPanel('backup')}>{t('backup.button')}</button>
+                  <button role="menuitem" onClick={() => openPanel('settings')}>{t('settings.title')}</button>
+                </div>
+              )}
+            </div>
+        </header>
+
+        <section className="hero">
+          <p className="muted">{t('app.subtitle')}</p>
           <div className="range" role="group" aria-label={t('app.period')}>
             {RANGES.map((r) => (
               <button key={r.label} className={r.days === range.days ? 'active' : ''} onClick={() => setRange(r)}>
@@ -229,7 +257,7 @@ export default function App() {
               </button>
             ))}
           </div>
-        </header>
+        </section>
 
         <section className="card toolbar">
           <label>
@@ -246,26 +274,7 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="toolbar-actions">
-            <button className="primary" onClick={() => openPanel('object-new')}>+ {t('object.new')}</button>
-            <div className="menu">
-              <button className="ghost" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
-                {t('menu.manage')} ▾
-              </button>
-              {menuOpen && (
-                <div className="menu-list" role="menu">
-                  {object && (
-                    <button role="menuitem" onClick={() => openPanel('object-edit')}>{t('object.edit')}</button>
-                  )}
-                  {object && (
-                    <button role="menuitem" onClick={() => openPanel('meters')}>{t('meter.manage')}</button>
-                  )}
-                  <button role="menuitem" onClick={() => openPanel('backup')}>{t('backup.button')}</button>
-                  <button role="menuitem" onClick={() => openPanel('settings')}>{t('settings.title')}</button>
-                </div>
-              )}
-            </div>
-          </div>
+          <button className="primary" onClick={() => openPanel('object-new')}>+ {t('object.new')}</button>
         </section>
 
         {error && <div className="banner error">{error}</div>}
