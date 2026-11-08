@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useT } from '../i18n.js';
 import { parseNumber } from '../lib/format.js';
+import { fetchBackup, restoreBackup } from '../api.js';
 
 // Create a new object, or edit the selected one.
 export function ObjectPanel({ object, onSave, onDelete, onClose }) {
@@ -177,6 +178,63 @@ export function SettingsPanel({ prefs, onChange, onClose }) {
           </select>
         </label>
       </div>
+      <div>
+        <button className="ghost" onClick={onClose}>{t('common.close')}</button>
+      </div>
+    </section>
+  );
+}
+
+// Export the whole database as JSON, or replace it with a previously exported file.
+export function BackupPanel({ onRestored, onClose }) {
+  const t = useT();
+  const [message, setMessage] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function download() {
+    setError(null);
+    try {
+      const blob = await fetchBackup();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `usage-counter-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function restore(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError(null);
+    setMessage(null);
+    if (!window.confirm(t('backup.restoreConfirm'))) return;
+    try {
+      const counts = await restoreBackup(await file.text());
+      setMessage(t('backup.done', counts));
+      onRestored();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <section className="card panel">
+      <h2>{t('backup.title')}</h2>
+      <p className="muted small">{t('backup.hint')}</p>
+      <div className="inline">
+        <button className="primary" onClick={download}>{t('backup.download')}</button>
+        <label className="file-button">
+          {t('backup.restore')}
+          <input type="file" accept="application/json,.json" onChange={restore} hidden />
+        </label>
+      </div>
+      {message && <div className="banner">{message}</div>}
+      {error && <div className="banner error">{error}</div>}
       <div>
         <button className="ghost" onClick={onClose}>{t('common.close')}</button>
       </div>

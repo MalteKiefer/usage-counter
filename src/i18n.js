@@ -1,6 +1,14 @@
 import { createContext, useContext } from 'react';
 
 const DE = {
+  'menu.manage': 'Verwaltung',
+  'backup.button': 'Backup',
+  'backup.title': 'Backup und Wiederherstellung',
+  'backup.hint': 'Das Backup enthält alle Objekte, Zähler, Ablesungen, Tankungen und Anzeiger-Werte als JSON-Datei.',
+  'backup.download': 'Backup herunterladen',
+  'backup.restore': 'Backup wiederherstellen',
+  'backup.restoreConfirm': 'Alle aktuellen Daten werden durch das Backup ersetzt. Fortfahren?',
+  'backup.done': 'Wiederhergestellt: {objects} Objekte, {meters} Zähler, {readings} Ablesungen, {refills} Tankungen, {tankLevels} Anzeiger-Werte.',
   'app.title': 'Verbrauch Tracker',
   'app.subtitle': 'Heizöl, Wasser und Strom erfassen, auswerten und Reichweite prognostizieren.',
   'app.loadError': 'Daten konnten nicht geladen werden: {msg}',
@@ -165,6 +173,14 @@ const DE = {
 };
 
 const EN = {
+  'menu.manage': 'Manage',
+  'backup.button': 'Backup',
+  'backup.title': 'Backup and restore',
+  'backup.hint': 'The backup holds all objects, meters, readings, refills and gauge values as a JSON file.',
+  'backup.download': 'Download backup',
+  'backup.restore': 'Restore backup',
+  'backup.restoreConfirm': 'All current data will be replaced by the backup. Continue?',
+  'backup.done': 'Restored: {objects} objects, {meters} meters, {readings} readings, {refills} refills, {tankLevels} gauge values.',
   'app.title': 'Usage Tracker',
   'app.subtitle': 'Track heating oil, water and power, analyse usage and forecast the reach.',
   'app.loadError': 'Data could not be loaded: {msg}',

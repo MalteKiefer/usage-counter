@@ -30,7 +30,7 @@
     "dev": "concurrently -n api,web \"node --watch server/index.js\" \"vite\"",
     "build": "vite build",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "node --test src/lib/derive.test.js src/lib/tank.test.js src/lib/water.test.js src/lib/format.test.js server/api.test.js server/db.test.js",
+    "test": "node --test src/lib/derive.test.js src/lib/tank.test.js src/lib/water.test.js src/lib/format.test.js server/api.test.js server/db.test.js server/backup.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
