@@ -804,3 +804,24 @@ button.icon.danger:hover {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 }
+
+.app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.app-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-footer a:hover {
+  color: var(--text);
+  border-bottom-color: var(--flame);
+}
