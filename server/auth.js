@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import * as client from 'openid-client';
 import { db } from './db.js';
 import { config } from './config.js';
@@ -128,7 +129,15 @@ async function fetchPicture(url) {
 
 export const authRouter = express.Router();
 
-authRouter.get('/auth/login', async (_req, res) => {
+// Each sign-in starts and ends with these routes. Limiting them slows down guessing of states and codes.
+const signInLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+});
+
+authRouter.get('/auth/login', signInLimit, async (_req, res) => {
   stmt.purgeLogins.run(Date.now() - LOGIN_TTL_MS);
   const state = client.randomState();
   const nonce = client.randomNonce();
@@ -146,7 +155,7 @@ authRouter.get('/auth/login', async (_req, res) => {
   res.set('Cache-Control', 'no-store').redirect(url.href);
 });
 
-authRouter.get('/auth/callback', async (req, res) => {
+authRouter.get('/auth/callback', signInLimit, async (req, res) => {
   const current = new URL(req.originalUrl, oidc.redirectUrl);
   const state = current.searchParams.get('state');
   const login = state ? stmt.takeLogin.get(state) : undefined;

@@ -263,3 +263,9 @@ test('logout ends the session', async () => {
   assert.equal((await call('POST', '/auth/logout', { cookie })).status, 204);
   assert.equal((await call('GET', '/api/objects', { cookie, origin: null })).status, 401);
 });
+
+test('sign-in routes are rate limited', async () => {
+  let last;
+  for (let i = 0; i < 61; i += 1) last = await call('GET', '/auth/login');
+  assert.equal(last.status, 429);
+});
