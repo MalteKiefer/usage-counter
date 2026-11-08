@@ -238,4 +238,5 @@ export default {
   'tank.equivalent': '≈ {value} {unit} bei {density} kg/l',
   'form.meterValue': 'Zählerstand in {unit}',
   'form.example': 'z. B. {v}',
+  'common.confirm': 'Bestätigen',
 };
