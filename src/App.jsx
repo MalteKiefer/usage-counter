@@ -18,7 +18,9 @@ import {
   fetchTankLevels,
   logout,
   savePreferences,
+  updateMeter,
   updateObject,
+  errorText,
 } from './api.js';
 import { BackupPanel, MeterPanel, ObjectPanel, SettingsPanel } from './components/Panels.jsx';
 import LoginScreen from './components/LoginScreen.jsx';
@@ -74,10 +76,10 @@ export default function App() {
   useEffect(() => {
     fetchSession()
       .then(setSession)
-      .catch((err) => setSessionError(err.message));
+      .catch((err) => setSessionError(err));
   }, []);
 
-  if (sessionError) return <div className="banner error">{sessionError}</div>;
+  if (sessionError) return <div className="banner error">{errorText(sessionError, t)}</div>;
   if (!session) return null;
   if (session.auth.enabled && !session.user) {
     return (
@@ -140,7 +142,7 @@ function Main({ user }) {
         setObjectId((current) => (rows.some((o) => o.id === current) ? current : (rows[0]?.id ?? null)));
       })
       .catch((err) => {
-        if (active) setError(err.message);
+        if (active) setError(err);
       });
     return () => {
       active = false;
@@ -159,7 +161,7 @@ function Main({ user }) {
         setError(null);
       })
       .catch((err) => {
-        if (active) setError(err.message);
+        if (active) setError(err);
       });
     return () => {
       active = false;
@@ -172,7 +174,7 @@ function Main({ user }) {
       setObjects(rows);
       setObjectId((current) => (rows.some((o) => o.id === current) ? current : (rows[0]?.id ?? null)));
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -182,14 +184,14 @@ function Main({ user }) {
       setData(await loadObjectData(objectId));
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
   function changePrefs(next) {
     savePrefs(next);
     setPrefs(next);
-    if (user) queuePrefs(() => savePreferences(next)).catch((err) => setError(err.message));
+    if (user) queuePrefs(() => savePreferences(next)).catch((err) => setError(errorText(err, t)));
   }
 
   async function signOut() {
@@ -197,7 +199,7 @@ function Main({ user }) {
       await logout();
       window.location.assign('/');
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -219,17 +221,17 @@ function Main({ user }) {
         await refreshObject();
       }
     },
-    saveRefill: async (body) => {
-      await createRefill(objectId, body);
+    saveRefill: async (meterId, body) => {
+      await createRefill(meterId, body);
       await refreshObject();
     },
-    saveTankLevel: async (body) => {
-      await createTankLevel(objectId, body);
+    saveTankLevel: async (meterId, body) => {
+      await createTankLevel(meterId, body);
       await refreshObject();
     },
-    saveTankSize: async (size) => {
-      await updateObject(objectId, { tank_size: size });
-      await refreshObjects();
+    saveTankSize: async (meterId, size) => {
+      await updateMeter(meterId, { tank_size: size });
+      await refreshObject();
     },
     remove: async (endpoint, id) => {
       if (!window.confirm(t('app.deleteEntry'))) return;
@@ -237,7 +239,7 @@ function Main({ user }) {
         await DELETE_ENDPOINTS[endpoint](id);
         await refreshObject();
       } catch (err) {
-        setError(err.message);
+        setError(errorText(err, t));
       }
     },
   };
@@ -266,6 +268,11 @@ function Main({ user }) {
 
   async function addMeter(payload) {
     await createMeter(objectId, payload);
+    await refreshObject();
+  }
+
+  async function updateMeterInfo(id, body) {
+    await updateMeter(id, body);
     await refreshObject();
   }
 
@@ -341,7 +348,7 @@ function Main({ user }) {
           <button className="primary" onClick={() => openPanel('object-new')}>+ {t('object.new')}</button>
         </section>
 
-        {error && <div className="banner error">{error}</div>}
+        {error && <div className="banner error">{errorText(error, t)}</div>}
 
         {panel && (
           <Modal title={t(PANEL_TITLES[panel])} onClose={closePanel}>
@@ -356,7 +363,12 @@ function Main({ user }) {
               />
             )}
             {panel === 'meters' && object && (
-              <MeterPanel meters={data.meters} onAdd={addMeter} onDelete={removeMeter} />
+              <MeterPanel
+                meters={data.meters}
+                onAdd={addMeter}
+                onUpdate={updateMeterInfo}
+                onDelete={removeMeter}
+              />
             )}
             {panel === 'backup' && <BackupPanel onRestored={restoredBackup} onClose={closePanel} />}
             {panel === 'settings' && (
@@ -392,7 +404,6 @@ function Main({ user }) {
                 readings={data.readings}
                 refills={data.refills}
                 tankLevels={data.levels}
-                object={object}
                 range={range}
                 actions={actions}
               />

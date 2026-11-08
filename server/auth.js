@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import * as client from 'openid-client';
 import { db } from './db.js';
 import { config } from './config.js';
-import { DEFAULT_PREFS } from '../src/lib/prefsDefaults.js';
+import { normalizePrefs, prefsError } from '../src/lib/locale.js';
 
 const { oidc } = config;
 const COOKIE = 'usage_session';
@@ -16,11 +16,6 @@ const LOGIN_TTL_MS = 10 * 60 * 1000;
 const PICTURE_LIMIT_BYTES = 256 * 1024;
 const PICTURE_TIMEOUT_MS = 5000;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const PREFERENCE_VALUES = {
-  lang: ['de', 'en'],
-  numbers: ['de', 'en'],
-  dates: ['dmy', 'ymd'],
-};
 
 const issuerOrigin = oidc.issuerUrl ? new URL(oidc.issuerUrl).origin : null;
 const appOrigin = oidc.redirectUrl ? new URL(oidc.redirectUrl).origin : null;
@@ -83,14 +78,20 @@ export function loadUser(req, _res, next) {
 
 export function requireLogin(req, res, next) {
   if (!oidc.enabled || req.user) return next();
-  res.status(401).json({ error: 'Anmeldung erforderlich' });
+  res.status(401).json({ error: 'auth.required' });
 }
 
 // Cookies are SameSite=Lax, and this check also refuses cross-site writes from other clients.
 export function checkOrigin(req, res, next) {
   if (!oidc.enabled || SAFE_METHODS.has(req.method)) return next();
-  if (req.get('Origin') !== appOrigin) return res.status(403).json({ error: 'Herkunft nicht erlaubt' });
+  if (req.get('Origin') !== appOrigin) return res.status(403).json({ error: 'origin.forbidden' });
   next();
+}
+
+// Stored preferences that no longer pass validation fall back to the defaults, so the client never gets them.
+function storedPrefs(json) {
+  const prefs = normalizePrefs(JSON.parse(json));
+  return prefsError(prefs) ? normalizePrefs({}) : prefs;
 }
 
 export function sessionView(user) {
@@ -102,16 +103,12 @@ export function sessionView(user) {
       name: user.name,
       email: user.email,
       picture: stmt.pictureOf.get(user.id).picture,
-      prefs: { ...DEFAULT_PREFS, ...JSON.parse(user.prefs) },
+      prefs: storedPrefs(user.prefs),
     },
   };
 }
 
-export function preferencesError(body) {
-  if (!body || typeof body !== 'object') return 'Einstellungen fehlen';
-  const invalid = Object.keys(PREFERENCE_VALUES).find((key) => !PREFERENCE_VALUES[key].includes(body[key]));
-  return invalid ? `Ungültiger Wert für ${invalid}` : null;
-}
+
 
 // The picture comes from the issuer only, with a size limit, so a user cannot point the server at other hosts.
 async function fetchPicture(url) {
@@ -221,9 +218,9 @@ authRouter.post('/auth/logout', (req, res) => {
 });
 
 authRouter.put('/api/me/preferences', requireLogin, (req, res) => {
-  const error = preferencesError(req.body);
-  if (error) return res.status(422).json({ error });
-  const prefs = Object.fromEntries(Object.keys(PREFERENCE_VALUES).map((key) => [key, req.body[key]]));
+  const error = prefsError(req.body);
+  if (error) return res.status(422).json({ error: error.code, params: error.params });
+  const prefs = normalizePrefs(req.body);
   stmt.setPrefs.run(JSON.stringify(prefs), req.user.id);
   res.json(prefs);
 });

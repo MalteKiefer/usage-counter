@@ -1,3 +1,4 @@
+import { isTankMeter } from '../lib/meters.js';
 import { useState } from 'react';
 import { elapsedDays } from '../lib/derive.js';
 import { fmt, nowLocalInput, parseNumber } from '../lib/format.js';
@@ -5,7 +6,7 @@ import { useSubmit } from '../lib/useSubmit.js';
 import { useT } from '../i18n.js';
 
 // A meter with a garden sub-meter is read together with it, in one request.
-export default function MeterForm({ meter, garden, readings, unit, onSave }) {
+export default function MeterForm({ meter, garden, readings, unit, gaugeUnit, onSave }) {
   const t = useT();
   const [readAt, setReadAt] = useState(nowLocalInput);
   const [value, setValue] = useState('');
@@ -22,16 +23,12 @@ export default function MeterForm({ meter, garden, readings, unit, onSave }) {
   };
   const { error, saving, submit, fail } = useSubmit(onSave, reset);
 
-  const isOil = meter.kind === 'oil';
+  const hasTank = isTankMeter(meter);
   const isWater = meter.kind === 'water';
   const last = readings.at(-1);
   const valueNum = parseNumber(value);
-  const preview = isOil && value !== '' && readAt && !Number.isNaN(valueNum) ? buildPreview(readings, valueNum, readAt, t) : null;
-  const label = isOil
-    ? t('form.oilMeter')
-    : isWater
-      ? t('form.waterMeter')
-      : t('form.powerMeter');
+  const preview = hasTank && value !== '' && readAt && !Number.isNaN(valueNum) ? buildPreview(readings, valueNum, readAt, t) : null;
+  const label = isWater ? t('form.waterMeter', { unit }) : t('form.meterValue', { unit });
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -43,7 +40,7 @@ export default function MeterForm({ meter, garden, readings, unit, onSave }) {
       return;
     }
     const payloads = [{ meter_id: meter.id, read_at: readAt, meter: main, note }];
-    if (isOil) payloads[0].tank_level = level;
+    if (hasTank) payloads[0].tank_level = level;
     if (garden && gardenValue !== '') {
       payloads.push({ meter_id: garden.id, read_at: readAt, meter: sub, note });
     }
@@ -69,7 +66,7 @@ export default function MeterForm({ meter, garden, readings, unit, onSave }) {
       </label>
       {garden && (
         <label>
-          {t('form.gardenMeter')}
+          {t('form.gardenMeter', { unit })}
           <input
             type="text"
             inputMode="decimal"
@@ -78,13 +75,13 @@ export default function MeterForm({ meter, garden, readings, unit, onSave }) {
           />
         </label>
       )}
-      {isOil && (
+      {hasTank && (
         <label>
-          {t('form.gaugeOpt')}
+          {t('form.gaugeOpt', { unit: gaugeUnit })}
           <input
             type="text"
             inputMode="decimal"
-            placeholder="z. B. 420"
+            placeholder={t('form.example', { v: fmt(420, 0) })}
             value={gauge}
             onChange={(e) => setGauge(e.target.value)}
           />

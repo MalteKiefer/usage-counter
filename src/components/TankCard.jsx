@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { fmt, fmtDateTime, fmtMoney, fmtWallDate, parseNumber } from '../lib/format.js';
+import { errorText } from '../api.js';
 import { useT } from '../i18n.js';
 
-export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRefill, sinceRefill, onSaveTank }) {
+export default function TankCard({ tankSize, unit, equivalent, state, reach, rate, unitDay, lastRefill, sinceRefill, onSaveTank }) {
   const t = useT();
   const [size, setSize] = useState(tankSize ?? '');
   const [error, setError] = useState(null);
@@ -15,7 +16,7 @@ export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRe
       if (Number.isNaN(value)) throw new Error(t('form.invalidNumber'));
       await onSaveTank(value);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -27,11 +28,11 @@ export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRe
 
       <form className="tank-size" onSubmit={submit}>
         <label>
-          {t('tank.size')}
+          {t('tank.size')} ({unit})
           <div className="inline">
             <input
               type="text"
-              placeholder="z. B. 3000"
+              placeholder={t('form.example', { v: fmt(3000, 0) })}
               value={size}
               onChange={(e) => setSize(e.target.value)}
               required
@@ -40,13 +41,20 @@ export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRe
           </div>
         </label>
       </form>
+      {equivalent && (
+        <p className="muted small">
+          {t('tank.equivalent', { value: fmt(equivalent.value), unit: equivalent.unit, density: fmt(equivalent.density, 2) })}
+        </p>
+      )}
       {error && <div className="banner error">{error}</div>}
 
       {state ? (
         <div className="tank-level">
           <div className="gauge-head">
-            <span className="stat-value">{fmt(state.level)} L</span>
-            {tankSize && <span className="muted">{t('tank.of', { size: fmt(tankSize), pct: fmt(pct) })}</span>}
+            <span className="stat-value">{fmt(state.level)} {unit}</span>
+            {tankSize && (
+              <span className="muted">{t('tank.of', { size: fmt(tankSize), unit, pct: fmt(pct) })}</span>
+            )}
           </div>
           {pct !== null && (
             <div className="gauge" role="meter" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
@@ -73,7 +81,7 @@ export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRe
         <div className="last-refill">
           <span className="muted small">{t('tank.since')}</span>
           <span>
-            <strong>{fmt(sinceRefill.liters)} L</strong> · {fmt(sinceRefill.days)} {t('unit.day')} · {fmt(sinceRefill.perDay)} {unitDay}
+            <strong>{fmt(sinceRefill.liters)} {unit}</strong> · {fmt(sinceRefill.days)} {t('unit.day')} · {fmt(sinceRefill.perDay)} {unitDay}
           </span>
         </div>
       )}
@@ -82,7 +90,7 @@ export default function TankCard({ tankSize, state, reach, rate, unitDay, lastRe
         <div className="last-refill">
           <span className="muted small">{t('tank.last')}</span>
           <span>
-            {fmtDateTime(lastRefill.filled_at)} · {fmt(lastRefill.liters)} L
+            {fmtDateTime(lastRefill.filled_at)} · {fmt(lastRefill.liters)} {unit}
             {lastRefill.total_eur != null && ` · ${fmtMoney(lastRefill.total_eur)}`}
           </span>
         </div>

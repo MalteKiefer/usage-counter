@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Languages, number formats, currencies and units are defined in one place (`src/lib/locale.js`, `src/lib/units.js`). Adding a language means one file in `src/i18n/` and an entry in `LANGUAGES`.
+- Preferences: `numbers` is replaced by `locale` (a locale tag such as `de-DE`), and `currency` is new. Stored preferences are converted on read.
+- Money, dates, numbers and unit names follow the chosen locale and currency. Weekday names come from the locale.
+- The API answers errors with a code and parameters (`error`, `params`) instead of German text. The client translates them, so an API client has to do the same.
+- Server log and startup messages are in English.
+
+### Added
+
+- Serial number (Zählernummer) for water, power and gas meters, editable per meter.
+- Gas meter kind. Gas can be supplied directly (readings, like water) or from a LPG tank.
+- Meters can be edited (name, serial number, tank size).
+- Gas tanks have a density (kg per litre, default 0.54). The tank card shows the size in the other unit as well.
+- Gas tanks take their size, refills and gauge values in litres or kilograms (`tank_unit`). Oil tanks stay in litres.
+
+### Changed
+
+- Tanks belong to meters, not objects. Oil and gas meters hold the tank size, refills and gauge values.
+  Existing databases are converted on start: an object's tank moves to its oil meter, and an oil meter is created when an object has tank data but none.
+- API: tank size is set with `PUT /api/meters/:id`, refills and gauge values use `/api/meters/:id/refills` and `/api/meters/:id/tank-levels`.
+- The refill field `liters` holds the amount in the tank's unit (litres or kilograms).
+- Backup format is version 2. Version 1 backups are still restored and converted.
+
 ## [2.1.1] 2026-11-08
 
 ### Fixed

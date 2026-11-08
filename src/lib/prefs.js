@@ -1,14 +1,15 @@
-// Per-browser preferences until accounts exist: language and number and date formats.
-import { DEFAULT_PREFS } from './prefsDefaults.js';
+// Preferences kept in this browser: language, number, date and currency formats.
+import { DEFAULT_PREFS, normalizePrefs, prefsError } from './locale.js';
 
 const PREFS_KEY = 'oil-prefs';
 const SELECTED_KEY = 'oil-object';
 
 export function loadPrefs() {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+    const prefs = normalizePrefs(JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}'));
+    return prefsError(prefs) ? DEFAULT_PREFS : prefs;
   } catch (err) {
-    console.warn('Einstellungen nicht lesbar, Standard wird genutzt', err);
+    console.warn('Stored preferences are unreadable, using defaults', err);
     return DEFAULT_PREFS;
   }
 }
@@ -17,7 +18,7 @@ export function savePrefs(prefs) {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch (err) {
-    console.warn('Einstellungen nicht speicherbar', err);
+    console.warn('Preferences could not be stored', err);
   }
 }
 
@@ -25,7 +26,7 @@ export function loadSelectedObject() {
   try {
     return Number(localStorage.getItem(SELECTED_KEY)) || null;
   } catch (err) {
-    console.warn('Auswahl nicht lesbar', err);
+    console.warn('Stored object selection is unreadable', err);
     return null;
   }
 }
@@ -34,6 +35,6 @@ export function saveSelectedObject(id) {
   try {
     localStorage.setItem(SELECTED_KEY, String(id));
   } catch (err) {
-    console.warn('Auswahl nicht speicherbar', err);
+    console.warn('Object selection could not be stored', err);
   }
 }

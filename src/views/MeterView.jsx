@@ -12,6 +12,8 @@ import { meterCharts, tankChart, waterCharts } from '../lib/charts.js';
 import { buildIntervals, filterRange, monthlyTotals, summarize, windowStats } from '../lib/derive.js';
 import { fmt, fmtDateTime, fmtMoney, fmtWallDate } from '../lib/format.js';
 import { forecast, levelHistory, tankState, usageSinceRefill } from '../lib/tank.js';
+import { tankUnitLabel } from '../lib/units.js';
+import { convertTank, DEFAULT_LPG_DENSITY, isTankMeter } from '../lib/meters.js';
 import { unitsFor } from '../lib/units.js';
 import { pairWater } from '../lib/water.js';
 import { useT } from '../i18n.js';
@@ -27,8 +29,8 @@ function shareSum(paired, days, key) {
   return known.length ? known.reduce((s, p) => s + p[key], 0) : null;
 }
 
-const gardenSub = (value, t) =>
-  value == null ? t('stat.noGardenShare') : t('stat.ofWhich', { v: `${fmt(value, 3)} m³` });
+const gardenSub = (value, t, unit) =>
+  value == null ? t('stat.noGardenShare') : t('stat.ofWhich', { v: `${fmt(value, 3)} ${unit}` });
 
 const withIntervals = (rows, intervals) => {
   const byId = new Map(intervals.map((iv) => [iv.id, iv]));
@@ -48,17 +50,18 @@ function readingColumns(units, extra = []) {
   ];
 }
 
-const anzeigerColumn = {
+// Tank values are shown in the unit of the tank: litres for oil, litres or kilograms for gas.
+const anzeigerColumn = (tankUnit) => ({
   key: 'gauge',
   label: 'col.gauge',
   num: true,
-  render: (r) => (r.tank_level != null ? `ca. ${fmt(r.tank_level)} L` : 'n/a'),
-};
+  render: (r) => (r.tank_level != null ? `ca. ${fmt(r.tank_level)} ${tankUnit}` : 'n/a'),
+});
 
-const refillColumns = [
+const refillColumns = (tankUnit) => [
   { key: 'date', label: 'col.date', render: (r) => fmtDateTime(r.filled_at) },
-  { key: 'meter', label: 'col.meter', num: true, render: (r) => (r.meter != null ? `${fmt(r.meter)} L` : 'n/a') },
-  { key: 'amount', label: 'col.amount', num: true, render: (r) => `${fmt(r.liters)} L` },
+  { key: 'meter', label: 'col.meter', num: true, render: (r) => (r.meter != null ? `${fmt(r.meter)} ${tankUnit}` : 'n/a') },
+  { key: 'amount', label: 'col.amount', num: true, render: (r) => `${fmt(r.liters)} ${tankUnit}` },
   { key: 'price', label: 'col.price', num: true, render: (r) => (r.total_eur != null ? fmtMoney(r.total_eur) : 'n/a') },
   {
     key: 'ppl',
@@ -70,27 +73,39 @@ const refillColumns = [
     key: 'levelAfter',
     label: 'col.levelAfter',
     num: true,
-    render: (r, t) => (r.level_after != null ? `${fmt(r.level_after)} L` : t('ledger.full')),
+    render: (r, t) => (r.level_after != null ? `${fmt(r.level_after)} ${tankUnit}` : t('ledger.full')),
   },
   { key: 'note', label: 'col.note', muted: true, render: (r) => r.note },
 ];
 
-const gaugeColumns = [
+const gaugeColumns = (tankUnit) => [
   { key: 'date', label: 'col.date', render: (r) => fmtDateTime(r.read_at) },
-  { key: 'level', label: 'col.level', num: true, render: (r) => `ca. ${fmt(r.level)} L` },
+  { key: 'level', label: 'col.level', num: true, render: (r) => `ca. ${fmt(r.level)} ${tankUnit}` },
   { key: 'note', label: 'col.note', muted: true, render: (r) => r.note },
 ];
 
-// One meter of the selected object. Its readings, charts and forms; the tank belongs to the object.
-export default function MeterView({ meter, meters, readings, refills, tankLevels, object, range, actions }) {
+// One meter of the selected object. Its readings, charts and forms; a tank belongs to its meter.
+export default function MeterView({ meter, meters, readings, refills, tankLevels, range, actions }) {
   const t = useT();
   const units = useMemo(() => unitsFor(meter.kind, t), [meter.kind, t]);
   const { unit, dayUnit, digits } = units;
-  const oil = meter.kind === 'oil';
+  const tank = isTankMeter(meter);
   const water = meter.kind === 'water';
-  const tankSize = object.tank_size;
+  const tankSize = meter.tank_size;
+  const tankUnit = tankUnitLabel(meter.tank_unit);
+  // Gas tanks also show the size in the other unit, with the density the user gave (or the default).
+  const tankEquivalent =
+    meter.kind === 'gas' && tankSize != null
+      ? {
+          value: convertTank(tankSize, meter.tank_unit, meter.tank_density ?? DEFAULT_LPG_DENSITY),
+          unit: tankUnitLabel(meter.tank_unit === 'kg' ? 'l' : 'kg'),
+          density: meter.tank_density ?? DEFAULT_LPG_DENSITY,
+        }
+      : null;
 
   const mine = useMemo(() => readings.filter((r) => r.meter_id === meter.id), [readings, meter.id]);
+  const tankRefills = useMemo(() => refills.filter((f) => f.meter_id === meter.id), [refills, meter.id]);
+  const tankGauges = useMemo(() => tankLevels.filter((l) => l.meter_id === meter.id), [tankLevels, meter.id]);
   const garden = useMemo(
     () => (water ? meters.find((m) => m.sub_of === meter.id) ?? null : null),
     [meters, meter.id, water],
@@ -118,10 +133,10 @@ export default function MeterView({ meter, meters, readings, refills, tankLevels
           days,
           value: s.spanDays > 0 ? s.liters : null,
           perDay: s.perDay,
-          sub: garden ? gardenSub(shareSum(paired, days, 'garden'), t) : undefined,
+          sub: garden ? gardenSub(shareSum(paired, days, 'garden'), t, unit) : undefined,
         };
       }),
-    [paired, garden, t],
+    [paired, garden, t, unit],
   );
 
   const rate = useMemo(
@@ -129,37 +144,37 @@ export default function MeterView({ meter, meters, readings, refills, tankLevels
     [intervals, summary],
   );
   const state = useMemo(
-    () => (oil ? tankState(mine, refills, tankSize, tankLevels) : null),
-    [oil, mine, refills, tankSize, tankLevels],
+    () => (tank ? tankState(mine, tankRefills, tankSize, tankGauges) : null),
+    [tank, mine, tankRefills, tankSize, tankGauges],
   );
   const reach = useMemo(() => forecast(state, rate), [state, rate]);
   const levels = useMemo(
-    () => (oil ? levelHistory(mine, refills, tankSize, tankLevels) : []),
-    [oil, mine, refills, tankSize, tankLevels],
+    () => (tank ? levelHistory(mine, tankRefills, tankSize, tankGauges) : []),
+    [tank, mine, tankRefills, tankSize, tankGauges],
   );
-  const since = useMemo(() => (oil ? usageSinceRefill(mine, refills) : null), [oil, mine, refills]);
+  const since = useMemo(() => (tank ? usageSinceRefill(mine, tankRefills) : null), [tank, mine, tankRefills]);
 
   const last = mine.at(-1);
   const cards = water
     ? [
         {
           label: t('stat.mainMeter'),
-          value: last ? withUnit(last.meter, 'm³', 3) : 'n/a',
+          value: last ? withUnit(last.meter, unit, digits) : 'n/a',
           sub: last ? fmtDateTime(last.read_at) : t('stat.noReading'),
         },
         {
           label: t('stat.house'),
-          value: withUnit(shareSum(paired, range.days, 'house'), 'm³', 3),
+          value: withUnit(shareSum(paired, range.days, 'house'), unit, digits),
           sub: `${t(range.label)} · ${t('stat.shared')}`,
         },
         {
           label: t('stat.garden'),
-          value: withUnit(shareSum(paired, range.days, 'garden'), 'm³', 3),
+          value: withUnit(shareSum(paired, range.days, 'garden'), unit, digits),
           sub: `${t(range.label)} · ${t('stat.shared')}`,
         },
         {
           label: t('stat.perDay'),
-          value: withUnit(rangeStats.perDay, `m³/${t('unit.day')}`, 3),
+          value: withUnit(rangeStats.perDay, dayUnit, digits),
           sub: `${t(range.label)} · ${t('stat.days', { n: fmt(rangeStats.spanDays) })}`,
         },
       ]
@@ -181,7 +196,7 @@ export default function MeterView({ meter, meters, readings, refills, tankLevels
             ? t('stat.lastPeriodVal', { v: withUnit(summary.lastPerDay, dayUnit, digits) })
             : t('stat.needTwo'),
         },
-        oil
+        tank
           ? {
               label: t('stat.reach'),
               value: reach ? t('stat.days', { n: fmt(Math.round(reach.daysLeft)) }) : 'n/a',
@@ -199,33 +214,48 @@ export default function MeterView({ meter, meters, readings, refills, tankLevels
       ];
 
   const charts = useMemo(() => {
-    if (oil) return [...meterCharts(visible, monthly, units, t), tankChart(levels, t)];
+    if (tank) return [...meterCharts(visible, monthly, units, t), tankChart(levels, t, tankUnit)];
     if (water) return waterCharts(visible, monthly, units, t);
     return meterCharts(visible, monthly, units, t);
-  }, [oil, water, visible, monthly, levels, units, t]);
+  }, [tank, water, visible, monthly, levels, units, t, tankUnit]);
 
   const meterForm = (
-    <MeterForm meter={meter} garden={garden} readings={mine} unit={unit} onSave={actions.saveMeters} />
+    <MeterForm
+      meter={meter}
+      garden={garden}
+      readings={mine}
+      unit={unit}
+      gaugeUnit={tankUnit}
+      onSave={actions.saveMeters}
+    />
   );
-  const entryTabs = oil
+  const entryTabs = tank
     ? [
         { id: 'reading', label: t('form.reading'), node: meterForm },
-        { id: 'refill', label: t('form.refill'), node: <RefillForm onSave={actions.saveRefill} /> },
-        { id: 'gauge', label: t('form.gauge'), node: <TankLevelForm onSave={actions.saveTankLevel} /> },
+        {
+          id: 'refill',
+          label: t('form.refill'),
+          node: <RefillForm unit={tankUnit} meterUnit={unit} onSave={(body) => actions.saveRefill(meter.id, body)} />,
+        },
+        {
+          id: 'gauge',
+          label: t('form.gauge'),
+          node: <TankLevelForm unit={tankUnit} onSave={(body) => actions.saveTankLevel(meter.id, body)} />,
+        },
       ]
     : [{ id: 'reading', label: t('form.reading'), node: meterForm }];
 
-  const ledgerTabs = oil
+  const ledgerTabs = tank
     ? [
         {
           id: 'readings',
           label: t('ledger.readings'),
           endpoint: 'readings',
           rows: withIntervals(mine, intervals),
-          columns: readingColumns(units, [anzeigerColumn]),
+          columns: readingColumns(units, [anzeigerColumn(tankUnit)]),
         },
-        { id: 'refills', label: t('ledger.refills'), endpoint: 'refills', rows: refills, columns: refillColumns },
-        { id: 'gauge', label: t('ledger.gauge'), endpoint: 'tank-levels', rows: tankLevels, columns: gaugeColumns },
+        { id: 'refills', label: t('ledger.refills'), endpoint: 'refills', rows: tankRefills, columns: refillColumns(tankUnit) },
+        { id: 'gauge', label: t('ledger.gauge'), endpoint: 'tank-levels', rows: tankGauges, columns: gaugeColumns(tankUnit) },
       ]
     : water && garden
       ? [
@@ -259,19 +289,21 @@ export default function MeterView({ meter, meters, readings, refills, tankLevels
       <StatCards cards={cards} />
       <WindowCards windows={windows} unit={unit} dayUnit={dayUnit} digits={digits} />
 
-      {oil ? (
+      {tank ? (
         <div className="split">
           <EntryCard tabs={entryTabs} />
           <TankCard
-            key={`${object.id}-${tankSize}`}
+            key={`${meter.id}-${tankSize}`}
             tankSize={tankSize}
+            unit={tankUnit}
+            equivalent={tankEquivalent}
             state={state}
             reach={reach}
             rate={rate}
             unitDay={dayUnit}
-            lastRefill={refills.at(-1)}
+            lastRefill={tankRefills.at(-1)}
             sinceRefill={since}
-            onSaveTank={actions.saveTankSize}
+            onSaveTank={(size) => actions.saveTankSize(meter.id, size)}
           />
         </div>
       ) : (

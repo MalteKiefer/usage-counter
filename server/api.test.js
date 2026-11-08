@@ -78,7 +78,10 @@ test('stores several meters of one moment in one request or none', async () => {
     { meter_id: meters.garden, read_at: '2020-01-02T08:00', meter: 5 },
   ]);
   assert.equal(bad.status, 422);
-  assert.match((await bad.json()).error, /^Eintrag 2: /);
+  const batchError = await bad.json();
+  assert.equal(batchError.error, 'reading.entry');
+  assert.equal(batchError.params.index, 2);
+  assert.equal(batchError.params.cause.code, 'reading.belowPrevious');
   const water = (await getJson(`/api/objects/${objectId}/readings`)).filter((r) => r.meter_id === meters.water);
   assert.deepEqual(water.map((r) => r.read_at), ['2020-01-01T08:00']);
 });
@@ -143,32 +146,34 @@ test('unknown API path returns JSON 404', async () => {
   assert.equal(res.headers.get('content-type').startsWith('application/json'), true);
 });
 
-test('tank size of an object is validated', async () => {
-  assert.equal((await send('PUT', `/api/objects/${objectId}`, { tank_size: 0 })).status, 422);
-  const res = await send('PUT', `/api/objects/${objectId}`, { tank_size: 3000 });
+test('tank size of a meter is validated', async () => {
+  assert.equal((await send('PUT', `/api/meters/${meters.oil}`, { tank_size: 0 })).status, 422);
+  assert.equal((await send('PUT', `/api/meters/${meters.water}`, { tank_size: 500 })).status, 422);
+  const res = await send('PUT', `/api/meters/${meters.oil}`, { tank_size: 3000 });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).tank_size, 3000);
 });
 
-test('stores standalone tank level and rejects above tank size', async () => {
-  const ok = await send('POST', `/api/objects/${objectId}/tank-levels`, { read_at: '2020-01-02T08:00', level: 400 });
+test('stores standalone tank level on the tank meter and rejects above tank size', async () => {
+  const ok = await send('POST', `/api/meters/${meters.oil}/tank-levels`, { read_at: '2020-01-02T08:00', level: 400 });
   assert.equal(ok.status, 201);
   assert.equal(
-    (await send('POST', `/api/objects/${objectId}/tank-levels`, { read_at: '2020-01-03T08:00', level: 4000 })).status,
+    (await send('POST', `/api/meters/${meters.oil}/tank-levels`, { read_at: '2020-01-03T08:00', level: 4000 })).status,
     422,
   );
-  const [row] = await getJson(`/api/objects/${objectId}/tank-levels`);
+  assert.equal((await send('POST', `/api/meters/${meters.water}/tank-levels`, { read_at: '2020-01-03T08:00', level: 1 })).status, 422);
+  const [row] = (await getJson(`/api/objects/${objectId}/tank-levels`)).filter((l) => l.meter_id === meters.oil);
   assert.equal((await send('DELETE', `/api/tank-levels/${row.id}`)).status, 204);
 });
 
-test('refill meter must fit the oil readings of the object', async () => {
-  const low = await send('POST', `/api/objects/${objectId}/refills`, {
+test('refill meter must fit the oil readings of the tank', async () => {
+  const low = await send('POST', `/api/meters/${meters.oil}/refills`, {
     filled_at: '2020-01-04T08:00',
     meter: 1040,
     liters: 100,
   });
   assert.equal(low.status, 422);
-  const ok = await send('POST', `/api/objects/${objectId}/refills`, {
+  const ok = await send('POST', `/api/meters/${meters.oil}/refills`, {
     filled_at: '2020-01-04T08:00',
     meter: 1150,
     liters: 100,
@@ -176,21 +181,22 @@ test('refill meter must fit the oil readings of the object', async () => {
   assert.equal(ok.status, 201);
   const body = await ok.json();
   assert.equal(body.meter, 1150);
+  assert.equal(body.meter_id, meters.oil);
   assert.equal((await send('DELETE', `/api/refills/${body.id}`)).status, 204);
 });
 
 test('rejects refill with zero liters or level above tank size', async () => {
-  assert.equal((await send('POST', `/api/objects/${objectId}/refills`, { filled_at: '2020-01-06T08:00', liters: 0 })).status, 422);
+  assert.equal((await send('POST', `/api/meters/${meters.oil}/refills`, { filled_at: '2020-01-06T08:00', liters: 0 })).status, 422);
   assert.equal(
-    (await send('POST', `/api/objects/${objectId}/refills`, { filled_at: '2020-01-06T08:00', liters: 100, level_after: 3500 })).status,
+    (await send('POST', `/api/meters/${meters.oil}/refills`, { filled_at: '2020-01-06T08:00', liters: 100, level_after: 3500 })).status,
     422,
   );
 });
 
-test('tank size of an object cannot drop below stored levels', async () => {
+test('tank size of a meter cannot drop below stored levels', async () => {
   // oil reading 2020-01-02 holds a gauge value of 300 L
-  assert.equal((await send('PUT', `/api/objects/${objectId}`, { tank_size: 250 })).status, 422);
-  assert.equal((await send('PUT', `/api/objects/${objectId}`, { tank_size: 3000 })).status, 200);
+  assert.equal((await send('PUT', `/api/meters/${meters.oil}`, { tank_size: 250 })).status, 422);
+  assert.equal((await send('PUT', `/api/meters/${meters.oil}`, { tank_size: 3000 })).status, 200);
 });
 
 test('deleting a meter removes its readings', async () => {
@@ -219,6 +225,67 @@ test('sends security headers', async () => {
   const res = await fetch(`${base}/api/objects`);
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
   assert.match(res.headers.get('content-security-policy'), /default-src 'self'/);
+});
+
+test('meters take a serial number, gas is a kind, and serial numbers are checked', async () => {
+  const created = await send('POST', `/api/objects/${objectId}/meters`, { kind: 'gas', name: 'Gaszähler', serial: ' G-4711 ' });
+  assert.equal(created.status, 201);
+  const gas = await created.json();
+  assert.equal(gas.serial, 'G-4711');
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'oil', name: 'Öl', serial: '1' })).status, 422);
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'power', name: 'Strom', serial: 'a;b' })).status, 422);
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'power', name: 'Strom', serial: 'x'.repeat(51) })).status, 422);
+  const renamed = await send('PUT', `/api/meters/${gas.id}`, { name: 'Gas Keller', serial: '' });
+  assert.equal(renamed.status, 200);
+  const body = await renamed.json();
+  assert.equal(body.name, 'Gas Keller');
+  assert.equal(body.serial, null);
+  assert.equal((await send('PUT', `/api/meters/${gas.id}`, { serial: 42 })).status, 422);
+  assert.equal((await send('PUT', '/api/meters/9999', { name: 'x' })).status, 404);
+});
+
+test('only tank meters take refills, and a gas tank can be added and kept', async () => {
+  const direct = await (await send('POST', `/api/objects/${objectId}/meters`, { kind: 'gas', name: 'Gas direkt' })).json();
+  assert.equal(direct.tank_size, null);
+  const refill = { filled_at: '2020-05-01T08:00', liters: 10 };
+  assert.equal((await send('POST', `/api/meters/${direct.id}/refills`, refill)).status, 422);
+  assert.equal((await send('POST', `/api/meters/${meters.water}/refills`, refill)).status, 422);
+  const tank = await (await send('PUT', `/api/meters/${direct.id}`, { tank_size: 1100 })).json();
+  assert.equal(tank.tank_size, 1100);
+  const added = await send('POST', `/api/meters/${direct.id}/refills`, refill);
+  assert.equal(added.status, 201);
+  const filled = await added.json();
+  assert.equal(filled.meter_id, direct.id);
+  assert.equal((await send('PUT', `/api/meters/${direct.id}`, { tank_size: null })).status, 422);
+  assert.equal((await send('DELETE', `/api/refills/${filled.id}`)).status, 204);
+  assert.equal((await send('PUT', `/api/meters/${direct.id}`, { tank_size: null })).status, 200);
+});
+
+test('gas tanks can be given in kilograms, oil tanks cannot', async () => {
+  const bottle = await send('POST', `/api/objects/${objectId}/meters`, { kind: 'gas', name: 'Flasche', tank_size: 11, tank_unit: 'kg' });
+  assert.equal(bottle.status, 201);
+  const gas = await bottle.json();
+  assert.equal(gas.tank_unit, 'kg');
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'oil', name: 'Öl kg', tank_unit: 'kg' })).status, 422);
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'gas', name: 'Pfund', tank_unit: 'lb' })).status, 422);
+  assert.equal((await send('PUT', `/api/meters/${gas.id}`, { tank_unit: 'l' })).status, 200);
+  const refill = await send('POST', `/api/meters/${gas.id}/refills`, { filled_at: '2020-06-01T08:00', liters: 4.5 });
+  assert.equal(refill.status, 201);
+  assert.equal((await send('PUT', `/api/meters/${gas.id}`, { tank_unit: 'kg' })).status, 422);
+  assert.equal((await send('DELETE', `/api/meters/${gas.id}`)).status, 204);
+});
+
+test('gas tanks keep a density in kg per litre, other meters do not', async () => {
+  const bottle = await send('POST', `/api/objects/${objectId}/meters`, { kind: 'gas', name: 'Flüssiggas', tank_size: 11, tank_unit: 'kg', tank_density: 0.5 });
+  assert.equal(bottle.status, 201);
+  const gas = await bottle.json();
+  assert.equal(gas.tank_density, 0.5);
+  assert.equal((await send('POST', `/api/objects/${objectId}/meters`, { kind: 'oil', name: 'Öl dichte', tank_density: 0.5 })).status, 422);
+  assert.equal((await send('PUT', `/api/meters/${gas.id}`, { tank_density: 2 })).status, 422);
+  const updated = await send('PUT', `/api/meters/${gas.id}`, { tank_density: null });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).tank_density, null);
+  assert.equal((await send('DELETE', `/api/meters/${gas.id}`)).status, 204);
 });
 
 test('deleting an object removes its meters', async () => {

@@ -55,8 +55,8 @@ after(() => {
 });
 
 test('migrates to one object with meters by former channel', () => {
-  const object = db.prepare('SELECT id, name, tank_size FROM objects').all().map((o) => ({ ...o }));
-  assert.deepEqual(object, [{ id: 1, name: 'Haus', tank_size: 3000 }]);
+  const object = db.prepare('SELECT id, name FROM objects').all().map((o) => ({ ...o }));
+  assert.deepEqual(object, [{ id: 1, name: 'Haus' }]);
   const meters = db.prepare('SELECT object_id, kind, name, sub_of FROM meters ORDER BY id').all().map((m) => ({ ...m }));
   assert.deepEqual(meters.map((m) => [m.kind, m.name, m.sub_of === null]), [
     ['oil', 'Heizöl', true],
@@ -79,10 +79,12 @@ test('moves readings to their meters and keeps the values', () => {
   ]);
 });
 
-test('moves refills and gauge values to the object', () => {
-  const refill = db.prepare('SELECT object_id, meter FROM refills').get();
-  assert.deepEqual({ ...refill }, { object_id: 1, meter: 1050 });
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM tank_levels WHERE object_id = 1').get().n, 0);
+test('moves the tank size to the oil meter and refills to that tank', () => {
+  const oil = db.prepare("SELECT id, tank_size FROM meters WHERE kind = 'oil'").get();
+  assert.deepEqual({ ...oil }, { id: 1, tank_size: 3000 });
+  const refill = db.prepare('SELECT meter_id, meter FROM refills').get();
+  assert.deepEqual({ ...refill }, { meter_id: 1, meter: 1050 });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM tank_levels WHERE meter_id = 1').get().n, 0);
 });
 
 test('channel-less or unknown meter kinds are rejected by the schema', () => {

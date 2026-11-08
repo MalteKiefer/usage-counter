@@ -15,7 +15,7 @@ function integer(env, name, fallback, min, max) {
   if (env[name] === undefined || env[name] === '') return fallback;
   const value = Number(env[name]);
   if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(`${name} muss eine ganze Zahl zwischen ${min} und ${max} sein`);
+    throw new Error(`${name} must be a whole number from ${min} to ${max}`);
   }
   return value;
 }
@@ -25,7 +25,7 @@ function boolean(env, name, fallback) {
   if (value === undefined || value === '') return fallback;
   if (['true', '1'].includes(value)) return true;
   if (['false', '0'].includes(value)) return false;
-  throw new Error(`${name} muss true oder false sein`);
+  throw new Error(`${name} must be true or false`);
 }
 
 function list(env, name) {
@@ -64,10 +64,10 @@ export function loadConfig(env = process.env) {
       ['OIDC_REDIRECT_URL', oidc.redirectUrl],
       ['OIDC_ALLOWED_EMAILS', oidc.allowedEmails.length],
     ].filter(([, value]) => !value).map(([name]) => name);
-    if (missing.length) throw new Error(`OIDC_ENABLED=true, es fehlt: ${missing.join(', ')}`);
+    if (missing.length) throw new Error(`OIDC_ENABLED=true, but missing: ${missing.join(', ')}`);
   }
-  if (oidc.issuerUrl && !httpsUrl(oidc.issuerUrl)) throw new Error('OIDC_ISSUER_URL muss https sein (oder http auf localhost)');
-  if (oidc.redirectUrl && !httpsUrl(oidc.redirectUrl)) throw new Error('OIDC_REDIRECT_URL muss https sein (oder http auf localhost)');
+  if (oidc.issuerUrl && !httpsUrl(oidc.issuerUrl)) throw new Error('OIDC_ISSUER_URL must be https (or http on localhost)');
+  if (oidc.redirectUrl && !httpsUrl(oidc.redirectUrl)) throw new Error('OIDC_REDIRECT_URL must be https (or http on localhost)');
   oidc.cookieSecure = oidc.redirectUrl.startsWith('https://');
 
   return {

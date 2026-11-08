@@ -268,12 +268,19 @@ test('writes need the app origin', async () => {
 test('preferences are stored per account and validated', async () => {
   const { res } = await signIn();
   const cookie = sessionCookieOf(res);
-  const bad = await call('PUT', '/api/me/preferences', { cookie, body: { lang: 'fr', numbers: 'de', dates: 'dmy' } });
+  const bad = await call('PUT', '/api/me/preferences', {
+    cookie,
+    body: { lang: 'fr', locale: 'de-DE', dates: 'dmy', currency: 'EUR' },
+  });
   assert.equal(bad.status, 422);
-  const ok = await call('PUT', '/api/me/preferences', { cookie, body: { lang: 'en', numbers: 'en', dates: 'ymd' } });
+  assert.equal((await bad.json()).params.field, 'lang');
+  const ok = await call('PUT', '/api/me/preferences', {
+    cookie,
+    body: { lang: 'en', locale: 'en-GB', dates: 'ymd', currency: 'USD' },
+  });
   assert.equal(ok.status, 200);
   const session = await (await call('GET', '/api/session', { cookie, origin: null })).json();
-  assert.deepEqual(session.user.prefs, { lang: 'en', numbers: 'en', dates: 'ymd' });
+  assert.deepEqual(session.user.prefs, { lang: 'en', locale: 'en-GB', dates: 'ymd', currency: 'USD' });
 });
 
 test('signing in again ends the earlier session of the same browser', async () => {

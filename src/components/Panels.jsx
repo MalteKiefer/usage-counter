@@ -1,25 +1,25 @@
 import { useState } from 'react';
 import { useT } from '../i18n.js';
-import { parseNumber } from '../lib/format.js';
-import { fetchBackup, restoreBackup } from '../api.js';
+import { fmt, parseNumber } from '../lib/format.js';
+import { tankUnitLabel } from '../lib/units.js';
+import { DEFAULT_LPG_DENSITY, SERIAL_KINDS, TANK_KINDS } from '../lib/meters.js';
+import { CURRENCIES, DATE_ORDERS, LANGUAGES, NUMBER_LOCALES } from '../lib/locale.js';
+import { errorText, fetchBackup, restoreBackup } from '../api.js';
 
 // Create a new object, or edit the selected one.
 export function ObjectPanel({ object, onSave, onDelete, onClose }) {
   const t = useT();
   const [name, setName] = useState(object?.name ?? '');
-  const [tankSize, setTankSize] = useState(object?.tank_size ?? '');
   const [error, setError] = useState(null);
 
   async function submit(e) {
     e.preventDefault();
     setError(null);
     try {
-      const size = tankSize === '' ? null : parseNumber(tankSize);
-      if (Number.isNaN(size)) throw new Error(t('form.invalidNumber'));
-      await onSave({ name, tank_size: size }, object?.id ?? null);
+      await onSave({ name }, object?.id ?? null);
       onClose();
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -29,7 +29,7 @@ export function ObjectPanel({ object, onSave, onDelete, onClose }) {
       await onDelete(object.id);
       onClose();
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -40,15 +40,6 @@ export function ObjectPanel({ object, onSave, onDelete, onClose }) {
         <label>
           {t('object.name')}
           <input type="text" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label>
-          {t('object.tankSize')}
-          <input
-            type="text"
-            placeholder="z. B. 750"
-            value={tankSize}
-            onChange={(e) => setTankSize(e.target.value)}
-          />
         </label>
         {error && <div className="banner error">{error}</div>}
         <div className="inline">
@@ -66,12 +57,19 @@ export function ObjectPanel({ object, onSave, onDelete, onClose }) {
   );
 }
 
-// Meters of the selected object: list with delete, and a form to add one.
-export function MeterPanel({ meters, onAdd, onDelete }) {
+// Meters of the selected object: list with edit and delete, and a form to add one.
+const tankValue = (text) => (text === '' ? null : parseNumber(text));
+
+export function MeterPanel({ meters, onAdd, onUpdate, onDelete }) {
   const t = useT();
   const [kind, setKind] = useState('oil');
   const [name, setName] = useState('');
+  const [serial, setSerial] = useState('');
+  const [tankSize, setTankSize] = useState('');
+  const [tankUnit, setTankUnit] = useState('l');
+  const [density, setDensity] = useState('');
   const [subOf, setSubOf] = useState('');
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState(null);
   const waterMeters = meters.filter((m) => m.kind === 'water' && m.sub_of == null);
   const nameOf = (id) => meters.find((m) => m.id === id)?.name ?? '';
@@ -80,11 +78,59 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
     e.preventDefault();
     setError(null);
     try {
-      await onAdd({ kind, name, sub_of: kind === 'water' && subOf !== '' ? Number(subOf) : null });
+      const size = TANK_KINDS.includes(kind) ? tankValue(tankSize) : null;
+      const lpgDensity = kind === 'gas' ? tankValue(density) : null;
+      if (Number.isNaN(size) || Number.isNaN(lpgDensity)) throw new Error(t('form.invalidNumber'));
+      await onAdd({
+        kind,
+        name,
+        serial: SERIAL_KINDS.includes(kind) ? serial : null,
+        tank_size: size,
+        tank_unit: kind === 'gas' ? tankUnit : 'l',
+        tank_density: lpgDensity,
+        sub_of: kind === 'water' && subOf !== '' ? Number(subOf) : null,
+      });
       setName('');
+      setSerial('');
+      setTankSize('');
+      setTankUnit('l');
+      setDensity('');
       setSubOf('');
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
+    }
+  }
+
+  function startEdit(meter) {
+    setError(null);
+    setEditing({
+      id: meter.id,
+      kind: meter.kind,
+      name: meter.name,
+      serial: meter.serial ?? '',
+      tank: meter.tank_size ?? '',
+      unit: meter.tank_unit ?? 'l',
+      density: meter.tank_density ?? '',
+    });
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    setError(null);
+    try {
+      const body = { name: editing.name, serial: editing.serial };
+      if (TANK_KINDS.includes(editing.kind)) {
+        body.tank_size = tankValue(String(editing.tank));
+        body.tank_unit = editing.kind === 'gas' ? editing.unit : 'l';
+      }
+      if (editing.kind === 'gas') body.tank_density = tankValue(String(editing.density));
+      if ([body.tank_size, body.tank_density].some((value) => value !== undefined && Number.isNaN(value))) {
+        throw new Error(t('form.invalidNumber'));
+      }
+      await onUpdate(editing.id, body);
+      setEditing(null);
+    } catch (err) {
+      setError(errorText(err, t));
     }
   }
 
@@ -93,7 +139,7 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
     try {
       await onDelete(meter.id);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -101,17 +147,87 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
     <section className="card panel">
       <h2>{t('meter.manage')}</h2>
       <ul className="meter-list">
-        {meters.map((m) => (
-          <li key={m.id}>
-            <span>
-              <strong>{m.name}</strong> <span className="muted small">{t(`kind.${m.kind}`)}</span>
-              {m.sub_of != null && <span className="muted small"> · {nameOf(m.sub_of)}</span>}
-            </span>
-            <button className="icon danger" title={t('common.delete')} onClick={() => remove(m)}>
-              ✕
-            </button>
-          </li>
-        ))}
+        {meters.map((m) =>
+          editing?.id === m.id ? (
+            <li key={m.id}>
+              <form className="form" onSubmit={saveEdit}>
+                <div className="grid-2">
+                  <label>
+                    {t('meter.name')}
+                    <input
+                      type="text"
+                      maxLength={100}
+                      value={editing.name}
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                      required
+                    />
+                  </label>
+                  {SERIAL_KINDS.includes(m.kind) && (
+                    <label>
+                      {t('meter.serial')}
+                      <input
+                        type="text"
+                        maxLength={50}
+                        value={editing.serial}
+                        onChange={(e) => setEditing({ ...editing, serial: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  {TANK_KINDS.includes(m.kind) && (
+                    <label>
+                      {t('object.tankSize')} ({tankUnitLabel(editing.unit)})
+                      <input
+                        type="text"
+                        placeholder={t('meter.tankHint')}
+                        value={editing.tank}
+                        onChange={(e) => setEditing({ ...editing, tank: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  {m.kind === 'gas' && (
+                    <label>
+                      {t('meter.tankUnit')}
+                      <select value={editing.unit} onChange={(e) => setEditing({ ...editing, unit: e.target.value })}>
+                        <option value="l">{t('unit.litre')}</option>
+                        <option value="kg">{t('unit.kilo')}</option>
+                      </select>
+                    </label>
+                  )}
+                  {m.kind === 'gas' && (
+                    <label>
+                      {t('meter.density')}
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={fmt(DEFAULT_LPG_DENSITY, 2)}
+                        value={editing.density}
+                        onChange={(e) => setEditing({ ...editing, density: e.target.value })}
+                      />
+                    </label>
+                  )}
+                </div>
+                <div>
+                  <button type="submit" className="primary">{t('common.save')}</button>{' '}
+                  <button type="button" className="ghost" onClick={() => setEditing(null)}>{t('common.cancel')}</button>
+                </div>
+              </form>
+            </li>
+          ) : (
+            <li key={m.id}>
+              <span>
+                <strong>{m.name}</strong> <span className="muted small">{t(`kind.${m.kind}`)}</span>
+                {m.serial && <span className="muted small"> · {t('meter.serial')} {m.serial}</span>}
+                {m.sub_of != null && <span className="muted small"> · {nameOf(m.sub_of)}</span>}
+              </span>
+              <span className="row-actions">
+                <button className="ghost" onClick={() => startEdit(m)}>{t('meter.edit')}</button>
+                <button className="icon danger" title={t('common.delete')} onClick={() => remove(m)}>
+                  ✕
+                </button>
+              </span>
+            </li>
+          ),
+        )}
       </ul>
       <form className="form" onSubmit={submit}>
         <div className="grid-2">
@@ -121,6 +237,7 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
               <option value="oil">{t('kind.oil')}</option>
               <option value="water">{t('kind.water')}</option>
               <option value="power">{t('kind.power')}</option>
+              <option value="gas">{t('kind.gas')}</option>
             </select>
           </label>
           <label>
@@ -128,6 +245,46 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
             <input type="text" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
         </div>
+        {SERIAL_KINDS.includes(kind) && (
+          <label>
+            {t('meter.serial')}
+            <input type="text" maxLength={50} value={serial} onChange={(e) => setSerial(e.target.value)} />
+            <span className="muted small">{t('meter.serialHint')}</span>
+          </label>
+        )}
+        {TANK_KINDS.includes(kind) && (
+          <label>
+            {t('object.tankSize')} ({tankUnitLabel(kind === 'gas' ? tankUnit : 'l')})
+            <input
+              type="text"
+              placeholder={t('meter.tankHint')}
+              value={tankSize}
+              onChange={(e) => setTankSize(e.target.value)}
+            />
+          </label>
+        )}
+        {kind === 'gas' && (
+          <label>
+            {t('meter.tankUnit')}
+            <select value={tankUnit} onChange={(e) => setTankUnit(e.target.value)}>
+              <option value="l">{t('unit.litre')}</option>
+              <option value="kg">{t('unit.kilo')}</option>
+            </select>
+          </label>
+        )}
+        {kind === 'gas' && (
+          <label>
+            {t('meter.density')}
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder={fmt(DEFAULT_LPG_DENSITY, 2)}
+              value={density}
+              onChange={(e) => setDensity(e.target.value)}
+            />
+            <span className="muted small">{t('meter.densityHint')}</span>
+          </label>
+        )}
         {kind === 'water' && waterMeters.length > 0 && (
           <label>
             {t('meter.sub')}
@@ -150,31 +307,47 @@ export function MeterPanel({ meters, onAdd, onDelete }) {
 }
 
 // Per-browser preferences: language, number and date format.
+// Language, number format, date order and currency. Options come from the locale registry.
 export function SettingsPanel({ prefs, onChange, onClose }) {
   const t = useT();
+  const example = (locale) => new Intl.NumberFormat(locale).format(1234.5);
+  const dateExample = { dmy: '31.12.2026', ymd: '2026-12-31', mdy: '12/31/2026' };
+  const currencyName = (code) => new Intl.DisplayNames(prefs.lang, { type: 'currency' }).of(code);
+  const set = (key) => (e) => onChange({ ...prefs, [key]: e.target.value });
   return (
     <section className="card panel">
       <h2>{t('settings.title')}</h2>
-      <div className="grid-3">
+      <div className="grid-2">
         <label>
           {t('settings.lang')}
-          <select value={prefs.lang} onChange={(e) => onChange({ ...prefs, lang: e.target.value })}>
-            <option value="de">{t('lang.de')}</option>
-            <option value="en">{t('lang.en')}</option>
+          <select value={prefs.lang} onChange={set('lang')}>
+            {Object.entries(LANGUAGES).map(([code, lang]) => (
+              <option key={code} value={code}>{lang.name}</option>
+            ))}
           </select>
         </label>
         <label>
           {t('settings.numbers')}
-          <select value={prefs.numbers} onChange={(e) => onChange({ ...prefs, numbers: e.target.value })}>
-            <option value="de">{t('settings.numbersDe')}</option>
-            <option value="en">{t('settings.numbersEn')}</option>
+          <select value={prefs.locale} onChange={set('locale')}>
+            {NUMBER_LOCALES.map((locale) => (
+              <option key={locale} value={locale}>{`${locale} · ${example(locale)}`}</option>
+            ))}
           </select>
         </label>
         <label>
           {t('settings.dates')}
-          <select value={prefs.dates} onChange={(e) => onChange({ ...prefs, dates: e.target.value })}>
-            <option value="dmy">{t('settings.datesDmy')}</option>
-            <option value="ymd">{t('settings.datesYmd')}</option>
+          <select value={prefs.dates} onChange={set('dates')}>
+            {DATE_ORDERS.map((order) => (
+              <option key={order} value={order}>{dateExample[order]}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t('settings.currency')}
+          <select value={prefs.currency} onChange={set('currency')}>
+            {CURRENCIES.map((code) => (
+              <option key={code} value={code}>{`${code} · ${currencyName(code)}`}</option>
+            ))}
           </select>
         </label>
       </div>
@@ -203,7 +376,7 @@ export function BackupPanel({ onRestored, onClose }) {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 
@@ -219,7 +392,7 @@ export function BackupPanel({ onRestored, onClose }) {
       setMessage(t('backup.done', counts));
       onRestored();
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err, t));
     }
   }
 

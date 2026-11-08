@@ -52,7 +52,7 @@ test('exports the whole database with format and version', async () => {
   assert.match(res.headers.get('content-disposition'), /^attachment; filename="usage-counter-backup-\d{4}-\d{2}-\d{2}\.json"$/);
   const backup = await res.json();
   assert.equal(backup.format, 'usage-counter-backup');
-  assert.equal(backup.version, 1);
+  assert.equal(backup.version, 2);
   assert.equal(backup.data.objects.length, 1);
   assert.equal(backup.data.meters.length, 2);
   assert.equal(backup.data.readings.length, 2);
@@ -92,16 +92,21 @@ test('restore rejects a dangling reference and keeps the data', async () => {
   backup.data.readings.push({ id: 999, meter_id: 12345, read_at: '2020-03-01T08:00', meter: 1, tank_level: null, note: '' });
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
-  assert.match((await res.json()).error, /Zähler 12345 fehlt/);
+  const body = await res.json();
+  assert.equal(body.error, 'backup.row');
+  assert.equal(body.params.cause.code, 'backup.missingRef');
   assert.equal((await getJson(`/api/objects/${objectId}/readings`)).length, 2);
 });
 
 test('restore rejects an invalid row before writing', async () => {
+  const oil = await (await send('POST', `/api/objects/${objectId}/meters`, { kind: 'oil', name: 'Heizöl', tank_size: 3000 })).json();
   const backup = await getJson('/api/backup');
-  backup.data.refills.push({ id: 1, object_id: objectId, filled_at: '2020-02-30T10:00', meter: null, liters: 10, total_eur: null, level_after: null, note: '' });
+  backup.data.refills.push({ id: 1, meter_id: oil.id, filled_at: '2020-02-30T10:00', meter: null, liters: 10, total_eur: null, level_after: null, note: '' });
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
-  assert.match((await res.json()).error, /Datum und Uhrzeit ungültig/);
+  const body = await res.json();
+  assert.equal(body.error, 'backup.row');
+  assert.equal(body.params.cause.code, 'date.invalid');
   assert.equal((await getJson(`/api/objects/${objectId}/readings`)).length, 2);
 });
 
@@ -110,16 +115,19 @@ test('restore rejects entries that are not objects with a client error', async (
   backup.data.objects.push(null);
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
-  assert.match((await res.json()).error, /ist kein Objekt/);
+  assert.equal((await res.json()).error, 'backup.rowNotObject');
 });
 
 test('restore applies the same limits as the API', async () => {
+  const oil = await (await send('POST', `/api/objects/${objectId}/meters`, { kind: 'oil', name: 'Tank', tank_size: 3000 })).json();
   const backup = await getJson('/api/backup');
-  backup.data.objects[0].tank_size = 100;
-  backup.data.refills.push({ id: 60, object_id: objectId, filled_at: '2020-02-05T08:00', meter: null, liters: 10, total_eur: null, level_after: 500, note: '' });
+  backup.data.meters.find((m) => m.id === oil.id).tank_size = 100;
+  backup.data.refills.push({ id: 60, meter_id: oil.id, filled_at: '2020-02-05T08:00', meter: null, liters: 10, total_eur: null, level_after: 500, note: '' });
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
-  assert.match((await res.json()).error, /Füllstand|Tankgröße/);
+  const body = await res.json();
+  assert.equal(body.error, 'backup.row');
+  assert.equal(body.params.cause.code, 'tankSize.belowLevel');
 });
 
 test('restore rejects a meter value that decreases over time', async () => {
@@ -133,10 +141,10 @@ test('restore rejects a meter value that decreases over time', async () => {
 
 test('restore rejects a refill meter value outside the oil readings around it', async () => {
   const backup = await getJson('/api/backup');
-  backup.data.meters.push({ id: 77, object_id: objectId, kind: 'oil', name: 'Heizöl', sub_of: null });
+  backup.data.meters.push({ id: 77, object_id: objectId, kind: 'oil', name: 'Heizöl', sub_of: null, serial: null, tank_size: null });
   backup.data.readings.push({ id: 77, meter_id: 77, read_at: '2020-01-01T08:00', meter: 100, tank_level: null, note: '' });
   backup.data.readings.push({ id: 78, meter_id: 77, read_at: '2020-03-01T08:00', meter: 200, tank_level: null, note: '' });
-  backup.data.refills.push({ id: 50, object_id: objectId, filled_at: '2020-02-01T08:00', meter: 999999, liters: 10, total_eur: null, level_after: null, note: '' });
+  backup.data.refills.push({ id: 50, meter_id: 77, filled_at: '2020-02-01T08:00', meter: 999999, liters: 10, total_eur: null, level_after: null, note: '' });
   const res = await send('POST', '/api/restore?confirm=replace', backup);
   assert.equal(res.status, 422);
 });
@@ -172,4 +180,65 @@ test('restore refuses bodies above the 25 MB limit', async () => {
   const body = JSON.stringify({ format: 'usage-counter-backup', version: 1, padding: 'x'.repeat(26 * 1024 * 1024) });
   const res = await send('POST', '/api/restore?confirm=replace', undefined, body);
   assert.equal(res.status, 413);
+});
+
+test('backup keeps serial numbers and gas meters', async () => {
+  const house = await (await send('POST', '/api/objects', { name: 'Gashaus' })).json();
+  const gas = await (await send('POST', `/api/objects/${house.id}/meters`, { kind: 'gas', name: 'Gas', serial: 'G-1' })).json();
+  const backup = await getJson('/api/backup');
+  assert.equal(backup.data.meters.find((m) => m.id === gas.id).serial, 'G-1');
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 200);
+  const restored = (await getJson(`/api/objects/${house.id}/meters`)).find((m) => m.id === gas.id);
+  assert.equal(restored.kind, 'gas');
+  assert.equal(restored.serial, 'G-1');
+});
+
+test('restore rejects a serial number that is not text', async () => {
+  const backup = await getJson('/api/backup');
+  backup.data.meters[0].serial = 42;
+  const res = await send('POST', '/api/restore?confirm=replace', backup);
+  assert.equal(res.status, 422);
+});
+
+test('restore converts a version 1 backup and moves the tank to the oil meter', async () => {
+  const body = {
+    format: 'usage-counter-backup',
+    version: 1,
+    data: {
+      objects: [{ id: 700, name: 'Alt', tank_size: 2500 }],
+      meters: [{ id: 700, object_id: 700, kind: 'oil', name: 'Heizöl', sub_of: null }],
+      readings: [{ id: 1, meter_id: 700, read_at: '2020-01-01T08:00', meter: 100, tank_level: null, note: '' }],
+      refills: [{ id: 1, object_id: 700, filled_at: '2020-01-02T08:00', meter: null, liters: 500, total_eur: null, level_after: null, note: '' }],
+      tank_levels: [],
+    },
+  };
+  const res = await send('POST', '/api/restore?confirm=replace', body);
+  assert.equal(res.status, 200);
+  const [oil] = (await getJson('/api/objects/700/meters'));
+  assert.equal(oil.tank_size, 2500);
+  const [refill] = await getJson('/api/objects/700/refills');
+  assert.equal(refill.meter_id, oil.id);
+});
+
+test('restore rejects a version 1 backup whose object list is not a list', async () => {
+  const before = (await getJson('/api/objects')).length;
+  const body = {
+    format: 'usage-counter-backup',
+    version: 1,
+    data: { objects: 'alle', meters: [], readings: [], refills: [], tank_levels: [] },
+  };
+  const res = await send('POST', '/api/restore?confirm=replace', body);
+  assert.equal(res.status, 422);
+  assert.equal((await getJson('/api/objects')).length, before);
+});
+
+test('backup keeps the gas tank density', async () => {
+  const house = await (await send('POST', '/api/objects', { name: 'Dichte' })).json();
+  const gas = await (await send('POST', `/api/objects/${house.id}/meters`, { kind: 'gas', name: 'Gas', tank_size: 4.5, tank_density: 0.52 })).json();
+  const backup = await getJson('/api/backup');
+  assert.equal(backup.data.meters.find((m) => m.id === gas.id).tank_density, 0.52);
+  assert.equal((await send('POST', '/api/restore?confirm=replace', backup)).status, 200);
+  const restored = (await getJson(`/api/objects/${house.id}/meters`)).find((m) => m.id === gas.id);
+  assert.equal(restored.tank_density, 0.52);
 });
