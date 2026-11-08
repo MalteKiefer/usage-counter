@@ -15,7 +15,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
-    mem_limit: 512m
+    # Restore parses up to 25 MB of JSON, which needs several times that in memory.
+    mem_limit: 1g
     environment:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
     ports:

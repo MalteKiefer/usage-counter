@@ -17,6 +17,8 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const app = express();
 
 const METER_KINDS = ['oil', 'water', 'power'];
+// Backup export and restore share one size limit, so every exported file can be restored.
+const BACKUP_LIMIT_BYTES = 25 * 1024 * 1024;
 const ALLOWED_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
@@ -116,16 +118,21 @@ app.use((_req, res, next) => {
 
 // Restore is the only route that takes a large body. The default parser skips it.
 const jsonDefault = express.json();
-app.use('/api/restore', express.json({ limit: '10mb' }));
+app.use('/api/restore', express.json({ limit: BACKUP_LIMIT_BYTES }));
 app.use((req, res, next) => (req.path.startsWith('/api/restore') ? next() : jsonDefault(req, res, next)));
 
 app.get('/api/backup', (_req, res) => {
+  const body = JSON.stringify(exportBackup());
+  if (Buffer.byteLength(body) > BACKUP_LIMIT_BYTES) {
+    return res.status(413).json({ error: 'Backup ist größer als das Restore-Limit von 25 MB' });
+  }
   const date = new Date().toISOString().slice(0, 10);
   res.set({
+    'Content-Type': 'application/json; charset=utf-8',
     'Content-Disposition': `attachment; filename="usage-counter-backup-${date}.json"`,
     'Cache-Control': 'no-store',
   });
-  res.json(exportBackup());
+  res.send(body);
 });
 
 app.post('/api/restore', (req, res) => {

@@ -167,3 +167,9 @@ test('restore checks refill meters against readings in time order, not id order'
   const above = await send('POST', '/api/restore?confirm=replace', timeOrderBackup(210));
   assert.equal(above.status, 200);
 });
+
+test('restore refuses bodies above the 25 MB limit', async () => {
+  const body = JSON.stringify({ format: 'usage-counter-backup', version: 1, padding: 'x'.repeat(26 * 1024 * 1024) });
+  const res = await send('POST', '/api/restore?confirm=replace', undefined, body);
+  assert.equal(res.status, 413);
+});

@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Restore applies the same checks as the API: limits, tank size and meter order.
 - Restore checks refill meter values against readings in time order, not in the order rows are listed.
 - Restore answers malformed entries with a client error instead of a server error.
-- Restore body limit lowered to 10 MB.
+- Backup export and restore share a 25 MB limit, so every exported backup can be restored.
 - Backup download no longer revokes its object URL before the browser starts the download.
 - The app title is a top-level heading again.
 - Dialogs move focus into themselves and return it on close. Escape closes the menu.
