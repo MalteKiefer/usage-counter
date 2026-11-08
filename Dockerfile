@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# Pin the base image by digest before releasing, e.g. node:24-alpine@sha256:<digest>
-ARG NODE_IMAGE=node:24-alpine
+# Multi-arch index digest of node:24-alpine, resolved from Docker Hub on 2026-11-08.
+# Update deliberately: Dependabot proposes new digests for the docker ecosystem.
+ARG NODE_IMAGE=node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app

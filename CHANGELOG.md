@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] 2026-11-08
+
+### Changed
+
+- The runtime image no longer ships npm and corepack.
+- The base image is pinned by digest.
+
 ## [1.0.0] 2026-11-08
 
 ### Added
