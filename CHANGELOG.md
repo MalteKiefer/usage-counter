@@ -4,7 +4,15 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.0.0] 2026-11-08
+
+### Breaking
+
+- API: tank size is set with `PUT /api/meters/:id`. Refills and gauge values use `/api/meters/:id/refills` and `/api/meters/:id/tank-levels`.
+- API errors are `{ error: <code>, params }` instead of German text. Clients must translate the codes.
+- Backup format is version 2. Version 1 backups are still restored.
+- Preferences: `numbers` is replaced by `locale`. Stored preferences are converted on read.
+
 
 ### Changed
 
