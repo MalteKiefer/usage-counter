@@ -14,10 +14,14 @@ import {
   fetchObjects,
   fetchReadings,
   fetchRefills,
+  fetchSession,
   fetchTankLevels,
+  logout,
+  savePreferences,
   updateObject,
 } from './api.js';
 import { BackupPanel, MeterPanel, ObjectPanel, SettingsPanel } from './components/Panels.jsx';
+import LoginScreen from './components/LoginScreen.jsx';
 import Modal from './components/Modal.jsx';
 import { I18nContext, translator } from './i18n.js';
 import { loadPrefs, loadSelectedObject, savePrefs, saveSelectedObject } from './lib/prefs.js';
@@ -60,8 +64,32 @@ async function loadObjectData(id) {
   return { meters, readings, refills, levels };
 }
 
+// Asks the server who is signed in first. Without a session the login screen replaces the app.
 export default function App() {
-  const [prefs, setPrefs] = useState(loadPrefs);
+  const [session, setSession] = useState(null);
+  const [sessionError, setSessionError] = useState(null);
+  const t = translator(loadPrefs().lang);
+
+  useEffect(() => {
+    fetchSession()
+      .then(setSession)
+      .catch((err) => setSessionError(err.message));
+  }, []);
+
+  if (sessionError) return <div className="banner error">{sessionError}</div>;
+  if (!session) return null;
+  if (session.auth.enabled && !session.user) {
+    return (
+      <I18nContext.Provider value={t}>
+        <LoginScreen />
+      </I18nContext.Provider>
+    );
+  }
+  return <Main user={session.user} />;
+}
+
+function Main({ user }) {
+  const [prefs, setPrefs] = useState(() => user?.prefs ?? loadPrefs());
   const t = translator(prefs.lang);
   setFormatPrefs(prefs);
 
@@ -158,6 +186,16 @@ export default function App() {
   function changePrefs(next) {
     savePrefs(next);
     setPrefs(next);
+    if (user) savePreferences(next).catch((err) => setError(err.message));
+  }
+
+  async function signOut() {
+    try {
+      await logout();
+      window.location.assign('/');
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   // Focus moves to the menu button first, so the dialog returns focus there when it closes.
@@ -240,6 +278,13 @@ export default function App() {
           <h1 className="brand">
             <span className="flame">🔥</span> {t('app.title')}
           </h1>
+          {user && (
+            <div className="user">
+              {user.picture && <img src={user.picture} alt="" width="28" height="28" />}
+              <span className="user-name">{user.name}</span>
+              <button className="ghost" onClick={signOut}>{t('user.logout')}</button>
+            </div>
+          )}
           <div className="menu">
             <button
               ref={menuToggle}

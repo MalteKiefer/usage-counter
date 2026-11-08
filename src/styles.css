@@ -812,3 +812,34 @@ button.icon.danger:hover {
   color: var(--text);
   border-bottom-color: var(--flame);
 }
+
+/* Signed-in user in the app bar and the login screen */
+.user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  min-width: 0;
+}
+.user img {
+  border-radius: 50%;
+  object-fit: cover;
+}
+.user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+.login {
+  max-width: 26rem;
+  margin: 15vh auto 0;
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+@media (max-width: 640px) {
+  .user-name {
+    display: none;
+  }
+}

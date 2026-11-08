@@ -93,6 +93,8 @@ Invalid values stop the server at start-up with a message that names the variabl
 | `ALLOWED_HOSTS` | *(empty)* | Extra host names accepted in the Host header, comma separated |
 | `BACKUP_LIMIT_MB` | `25` | Largest backup that can be exported or restored, 1 to 100 |
 | `NODE_ENV` | *(unset)* | `production` serves the built web app from `dist/` |
+| `OIDC_ENABLED` | `false` | `true` turns on sign-in with Pocket-ID, see below |
+| `SESSION_DAYS` | `7` | How long a sign-in stays valid, 1 to 30 days |
 | `USAGE_COUNTER_VERSION` | `1.2.0` | Image tag used by Docker Compose |
 
 ### Secrets from files
@@ -100,26 +102,34 @@ Invalid values stop the server at start-up with a message that names the variabl
 Any secret can be read from a file instead of the variable itself: set `NAME_FILE` to the path.
 This works with Docker secrets, which mount files under `/run/secrets/`.
 
-### Single sign-on with Pocket-ID (prepared, not active)
+### Sign-in with Pocket-ID
 
-The OIDC settings are read and validated, but login is not implemented yet. `OIDC_ENABLED=true` stops the server on purpose.
+With `OIDC_ENABLED=true` the app shows a login screen and every API call needs a session. Login uses OpenID Connect with PKCE. Data is shared by all signed-in users, while language and number and date formats are stored per account.
 
 | Variable | Meaning |
 |---|---|
-| `OIDC_ENABLED` | Keep `false` until login exists |
-| `OIDC_ISSUER_URL` | Pocket-ID issuer, must be `https` |
+| `OIDC_ENABLED` | `true` turns on sign-in. The server stops at start-up if a required value is missing |
+| `OIDC_ISSUER_URL` | Pocket-ID issuer, must be `https` (or `http` on localhost) |
 | `OIDC_CLIENT_ID` | Client ID of the app in Pocket-ID |
 | `OIDC_CLIENT_SECRET` or `OIDC_CLIENT_SECRET_FILE` | Client secret, preferably as a file |
-| `OIDC_REDIRECT_URL` | Callback URL of the app, must be `https` (or `http` on localhost) |
+| `OIDC_REDIRECT_URL` | Callback URL `https://<your-host>/auth/callback`, must be `https` (or `http` on localhost) |
+| `OIDC_ALLOWED_EMAILS` | Comma separated list of the only mail addresses that may sign in. Required |
 | `OIDC_SCOPES` | Default `openid profile email` |
 
-To prepare a Compose setup, put the secret in `secrets/oidc_client_secret` (ignored by git), uncomment the `secrets` blocks and the `OIDC_CLIENT_SECRET_FILE` line in `docker-compose.yml`.
+Setup in Pocket-ID:
+
+1. Create an OIDC client with the callback URL `OIDC_REDIRECT_URL`.
+2. Copy the client ID and secret. Store the secret in `secrets/oidc_client_secret` (ignored by git).
+3. In `docker-compose.yml`, uncomment `OIDC_CLIENT_SECRET_FILE`, the service `secrets` block and the top level `secrets` block.
+4. Set `OIDC_ENABLED=true`, the issuer, client ID, redirect URL and allowed mail addresses in `.env`, then run `docker compose up -d`.
+
+The session cookie is `HttpOnly` and `SameSite=Lax`, and it is `Secure` when the redirect URL uses `https`. Only a hash of the session token is stored. Writes from other origins are refused. Behind a reverse proxy, add the public host name to `ALLOWED_HOSTS`.
 
 ## 🔒 Security
 
 > [!WARNING]
-> The API has **no authentication yet**. Run it on a trusted host only, keep the loopback binding,
-> or put it behind an authenticating reverse proxy.
+> Without `OIDC_ENABLED=true` the API has **no authentication**. Run it on a trusted host only, keep the loopback binding,
+> or enable sign-in with Pocket-ID.
 
 - Requests are rejected unless the Host header matches `localhost`, `127.0.0.1`, `::1` or `ALLOWED_HOSTS`. This blocks DNS rebinding.
 - Security headers: Content-Security-Policy, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`.

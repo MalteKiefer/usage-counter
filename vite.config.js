@@ -10,6 +10,6 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
   },
   server: {
-    proxy: { '/api': 'http://127.0.0.1:3001' },
+    proxy: { '/api': 'http://127.0.0.1:3001', '/auth': 'http://127.0.0.1:3001' },
   },
 });
