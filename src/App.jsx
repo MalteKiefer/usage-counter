@@ -25,6 +25,7 @@ import LoginScreen from './components/LoginScreen.jsx';
 import Modal from './components/Modal.jsx';
 import { I18nContext, translator } from './i18n.js';
 import { loadPrefs, loadSelectedObject, savePrefs, saveSelectedObject } from './lib/prefs.js';
+import { serial } from './lib/queue.js';
 import { setFormatPrefs } from './lib/format.js';
 import MeterView from './views/MeterView.jsx';
 
@@ -64,7 +65,7 @@ async function loadObjectData(id) {
   return { meters, readings, refills, levels };
 }
 
-// Asks the server who is signed in first. Without a session the login screen replaces the app.
+// No data may load before the server confirms the session, so the check runs first.
 export default function App() {
   const [session, setSession] = useState(null);
   const [sessionError, setSessionError] = useState(null);
@@ -90,6 +91,8 @@ export default function App() {
 
 function Main({ user }) {
   const [prefs, setPrefs] = useState(() => user?.prefs ?? loadPrefs());
+  // Preference saves go out in order, so the last change is the one the server keeps.
+  const [queuePrefs] = useState(serial);
   const t = translator(prefs.lang);
   setFormatPrefs(prefs);
 
@@ -186,7 +189,7 @@ function Main({ user }) {
   function changePrefs(next) {
     savePrefs(next);
     setPrefs(next);
-    if (user) savePreferences(next).catch((err) => setError(err.message));
+    if (user) queuePrefs(() => savePreferences(next)).catch((err) => setError(err.message));
   }
 
   async function signOut() {

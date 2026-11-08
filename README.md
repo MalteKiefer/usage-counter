@@ -38,7 +38,7 @@ Record readings, see consumption per interval, day and month, and find out how l
 ### Docker Compose (recommended)
 
 ```bash
-USAGE_COUNTER_VERSION=2.1.0 docker compose up -d
+USAGE_COUNTER_VERSION=2.1.1 docker compose up -d
 ```
 
 Open **http://127.0.0.1:8080**. Data lives in the Docker volume `data`.
@@ -61,7 +61,7 @@ To build from source instead: `docker compose up -d --build`.
 docker run -d --name usage-counter -p 127.0.0.1:8080:3001 \
   -v usage-counter:/data --read-only --tmpfs /tmp \
   --cap-drop ALL --security-opt no-new-privileges:true \
-  ghcr.io/maltekiefer/usage-counter:2.1.0
+  ghcr.io/maltekiefer/usage-counter:2.1.1
 ```
 
 ### From source
@@ -95,7 +95,7 @@ Invalid values stop the server at start-up with a message that names the variabl
 | `NODE_ENV` | *(unset)* | `production` serves the built web app from `dist/` |
 | `OIDC_ENABLED` | `false` | `true` turns on sign-in with Pocket-ID, see below |
 | `SESSION_DAYS` | `7` | How long a sign-in stays valid, 1 to 30 days |
-| `USAGE_COUNTER_VERSION` | `2.1.0` | Image tag used by Docker Compose |
+| `USAGE_COUNTER_VERSION` | `2.1.1` | Image tag used by Docker Compose |
 
 ### Secrets from files
 

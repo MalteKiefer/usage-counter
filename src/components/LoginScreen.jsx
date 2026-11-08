@@ -1,10 +1,9 @@
 import { useT } from '../i18n.js';
-
-const FAILURES = { failed: 'login.failed', denied: 'login.denied' };
+import { loginFailureKey } from '../lib/login.js';
 
 export default function LoginScreen() {
   const t = useT();
-  const failure = new URLSearchParams(window.location.search).get('login');
+  const failureKey = loginFailureKey(window.location.search);
   return (
     <main className="login card">
       <h1 className="brand">
@@ -12,7 +11,7 @@ export default function LoginScreen() {
       </h1>
       <h2>{t('login.title')}</h2>
       <p className="muted">{t('login.hint')}</p>
-      {FAILURES[failure] && <div className="banner error">{t(FAILURES[failure])}</div>}
+      {failureKey && <div className="banner error">{t(failureKey)}</div>}
       <button className="primary" onClick={() => window.location.assign('/auth/login')}>
         {t('login.button')}
       </button>

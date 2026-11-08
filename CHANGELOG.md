@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.1] 2026-11-08
+
+### Fixed
+
+- Sign-in: callback is bound to the browser that started it (login CSRF).
+- Sign-in: sign-in routes are rate limited (CodeQL).
+- Sign-in: signing in again ends the earlier session of the same browser.
+- Session response is `no-store`. Session lookup runs only for API and auth paths.
+- Preference changes are saved in order.
+- Failed profile picture fetch keeps the earlier picture.
+
 ## [2.1.0] 2026-11-08
 
 ### Added

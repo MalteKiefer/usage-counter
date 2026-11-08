@@ -4,11 +4,14 @@ import rateLimit from 'express-rate-limit';
 import * as client from 'openid-client';
 import { db } from './db.js';
 import { config } from './config.js';
+import { DEFAULT_PREFS } from '../src/lib/prefsDefaults.js';
 
-// Sign-in with Pocket-ID (OpenID Connect). Only used when OIDC_ENABLED=true.
 const { oidc } = config;
 const COOKIE = 'usage_session';
+// Ties the callback to the browser that started the sign-in (login CSRF).
+const LOGIN_COOKIE = 'usage_login';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SESSION_MS = oidc.sessionDays * DAY_MS;
 const LOGIN_TTL_MS = 10 * 60 * 1000;
 const PICTURE_LIMIT_BYTES = 256 * 1024;
 const PICTURE_TIMEOUT_MS = 5000;
@@ -18,7 +21,6 @@ const PREFERENCE_VALUES = {
   numbers: ['de', 'en'],
   dates: ['dmy', 'ymd'],
 };
-const DEFAULT_PREFS = { lang: 'de', numbers: 'de', dates: 'dmy' };
 
 const issuerOrigin = oidc.issuerUrl ? new URL(oidc.issuerUrl).origin : null;
 const appOrigin = oidc.redirectUrl ? new URL(oidc.redirectUrl).origin : null;
@@ -28,14 +30,19 @@ const stmt = {
   insertLogin: db.prepare('INSERT INTO login_states (state, nonce, verifier, created_at) VALUES (?, ?, ?, ?)'),
   takeLogin: db.prepare('DELETE FROM login_states WHERE state = ? RETURNING nonce, verifier, created_at'),
   purgeLogins: db.prepare('DELETE FROM login_states WHERE created_at < ?'),
+  // A failed picture fetch keeps the picture stored at an earlier sign-in.
   upsertUser: db.prepare(`
     INSERT INTO users (issuer, sub, email, name, picture) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT (issuer, sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture
+    ON CONFLICT (issuer, sub) DO UPDATE SET email = excluded.email, name = excluded.name,
+      picture = COALESCE(excluded.picture, users.picture)
     RETURNING id`),
   insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
+  purgeSessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
+  // The picture is a large data URL, so it is read only for the session view, not on every API call.
   sessionUser: db.prepare(`
-    SELECT u.id, u.email, u.name, u.picture, u.prefs FROM sessions s
+    SELECT u.id, u.email, u.name, u.prefs FROM sessions s
     JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`),
+  pictureOf: db.prepare('SELECT picture FROM users WHERE id = ?'),
   removeSession: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
   setPrefs: db.prepare('UPDATE users SET prefs = ? WHERE id = ?'),
 };
@@ -47,10 +54,10 @@ function readCookie(req, name) {
   return pair ? pair.slice(name.length + 1) : null;
 }
 
-function sessionCookie(value, maxAgeSeconds) {
+function setCookie(name, value, path, maxAgeSeconds) {
   return [
-    `${COOKIE}=${value}`,
-    'Path=/',
+    `${name}=${value}`,
+    `Path=${path}`,
     'HttpOnly',
     'SameSite=Lax',
     `Max-Age=${maxAgeSeconds}`,
@@ -58,7 +65,7 @@ function sessionCookie(value, maxAgeSeconds) {
   ].join('; ');
 }
 
-// Connects to Pocket-ID once at start-up; a wrong issuer stops the server with the error message.
+// Discovery runs once at start-up, so a wrong issuer stops the server instead of failing every sign-in.
 export async function initAuth() {
   if (!oidc.enabled) return;
   const isHttp = new URL(oidc.issuerUrl).protocol === 'http:';
@@ -67,7 +74,7 @@ export async function initAuth() {
   });
 }
 
-// Reads the session cookie on every request. Without OIDC there is no user.
+// Only API and auth paths read the session; static files never need it.
 export function loadUser(req, _res, next) {
   const token = readCookie(req, COOKIE);
   req.user = (token && stmt.sessionUser.get(hash(token), Date.now())) || null;
@@ -87,9 +94,16 @@ export function checkOrigin(req, res, next) {
 }
 
 export function sessionView(user) {
+  const auth = { enabled: oidc.enabled };
+  if (!user) return { auth, user: null };
   return {
-    auth: { enabled: oidc.enabled },
-    user: user ? { name: user.name, email: user.email, picture: user.picture, prefs: { ...DEFAULT_PREFS, ...JSON.parse(user.prefs) } } : null,
+    auth,
+    user: {
+      name: user.name,
+      email: user.email,
+      picture: stmt.pictureOf.get(user.id).picture,
+      prefs: { ...DEFAULT_PREFS, ...JSON.parse(user.prefs) },
+    },
   };
 }
 
@@ -152,13 +166,18 @@ authRouter.get('/auth/login', signInLimit, async (_req, res) => {
     code_challenge: await client.calculatePKCECodeChallenge(verifier),
     code_challenge_method: 'S256',
   });
-  res.set('Cache-Control', 'no-store').redirect(url.href);
+  res.set({
+    'Cache-Control': 'no-store',
+    'Set-Cookie': setCookie(LOGIN_COOKIE, state, '/auth', LOGIN_TTL_MS / 1000),
+  }).redirect(url.href);
 });
 
 authRouter.get('/auth/callback', signInLimit, async (req, res) => {
   const current = new URL(req.originalUrl, oidc.redirectUrl);
   const state = current.searchParams.get('state');
-  const login = state ? stmt.takeLogin.get(state) : undefined;
+  // Checked before the state is used up, so a forged callback cannot consume a sign-in in progress.
+  if (!state || readCookie(req, LOGIN_COOKIE) !== state) return res.redirect('/?login=failed');
+  const login = stmt.takeLogin.get(state);
   if (!login || login.created_at < Date.now() - LOGIN_TTL_MS) return res.redirect('/?login=failed');
 
   let claims;
@@ -184,14 +203,21 @@ authRouter.get('/auth/callback', signInLimit, async (req, res) => {
   const picture = await fetchPicture(claims.picture);
   const user = stmt.upsertUser.get(claims.iss, claims.sub, email, name || email, picture);
   const token = crypto.randomBytes(32).toString('base64url');
-  stmt.insertSession.run(hash(token), user.id, Date.now() + oidc.sessionDays * DAY_MS);
-  res.set('Set-Cookie', sessionCookie(token, oidc.sessionDays * 24 * 60 * 60)).redirect('/');
+  // A new sign-in replaces the session of this browser, so an older token stops working.
+  const previous = readCookie(req, COOKIE);
+  if (previous) stmt.removeSession.run(hash(previous));
+  stmt.purgeSessions.run(Date.now());
+  stmt.insertSession.run(hash(token), user.id, Date.now() + SESSION_MS);
+  res.set('Set-Cookie', [
+    setCookie(COOKIE, token, '/', SESSION_MS / 1000),
+    setCookie(LOGIN_COOKIE, '', '/auth', 0),
+  ]).redirect('/');
 });
 
 authRouter.post('/auth/logout', (req, res) => {
   const token = readCookie(req, COOKIE);
   if (token) stmt.removeSession.run(hash(token));
-  res.set('Set-Cookie', sessionCookie('', 0)).status(204).end();
+  res.set('Set-Cookie', setCookie(COOKIE, '', '/', 0)).status(204).end();
 });
 
 authRouter.put('/api/me/preferences', requireLogin, (req, res) => {

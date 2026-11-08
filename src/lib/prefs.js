@@ -1,14 +1,15 @@
 // Per-browser preferences until accounts exist: language and number and date formats.
+import { DEFAULT_PREFS } from './prefsDefaults.js';
+
 const PREFS_KEY = 'oil-prefs';
 const SELECTED_KEY = 'oil-object';
-const DEFAULTS = { lang: 'de', numbers: 'de', dates: 'dmy' };
 
 export function loadPrefs() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
   } catch (err) {
     console.warn('Einstellungen nicht lesbar, Standard wird genutzt', err);
-    return DEFAULTS;
+    return DEFAULT_PREFS;
   }
 }
 
