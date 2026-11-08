@@ -1,6 +1,6 @@
 {
   "name": "usage-counter",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Heizöl, Wasser und Strom erfassen, auswerten und Reichweite prognostizieren. Mehrere Objekte, Zähler mit Untermessern, Tankstand-Schätzung.",
   "license": "MIT",
   "author": "Malte Kiefer",
