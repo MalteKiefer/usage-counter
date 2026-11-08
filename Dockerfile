@@ -21,8 +21,11 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server ./server
 COPY --from=build /app/src/lib ./src/lib
 COPY --from=build /app/dist ./dist
-RUN mkdir -p /data && chown node:node /data
-USER node
+# The runtime needs only node. Removing npm and corepack keeps their bundled dependencies out of the image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+ && mkdir -p /data && chown 1000:1000 /data
+USER 1000:1000
 VOLUME ["/data"]
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
